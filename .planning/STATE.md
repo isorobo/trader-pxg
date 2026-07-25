@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 25 July 2026)
 
 **Core value:** The system never lies to itself — every strategy must prove its edge on honest data before any capital is at risk.
-**Current focus:** Phase 1 — Accounts & Data Plumbing (Phase 0 runs in parallel)
+**Current focus:** Phase 0 — Ground Truth (Phase 1 discussed, planning queued)
 
 ## Current Position
 
-Phase: 1 of 0–10 (Accounts & Data Plumbing)
+Phase: 0 of 0–10 (Ground Truth)
 Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-07-26 — Phase 1 context gathered (auto-selected defaults; see 01-CONTEXT.md)
+Status: Ready to plan (Phases 0 and 1 both have context)
+Last activity: 2026-07-26 — Phase 0 context gathered; planning Phase 0 next
 
 Progress: [░░░░░░░░░░] 0%
 
