@@ -1,6 +1,7 @@
 # Secrets — never committed (standing rule 3)
 .env
 .env.*
+!.env.example
 *.key
 secrets/
 

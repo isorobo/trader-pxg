@@ -1,0 +1,6 @@
+yfinance==1.5.2
+requests==2.34.2
+python-dotenv==1.2.2
+finviz==2.0.0
+pytest==9.1.1
+ruff==0.16.0
