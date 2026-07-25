@@ -402,22 +402,25 @@ def fetch_stock_close(symbol: str, on_date: str) -> float | None:
 
 **If this table is empty:** N/A — see entries above; all are moderate-to-low risk and none block Phase 0 from starting.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does the Yahoo Finance screener actually return ~50 rows correctly on `yfinance` 1.5.2 right now?**
    - What we know: The library has moved past the 0.2.56 release where the GET/POST bug was reported; changelog references screener-related fixes in the 1.0 line.
    - What's unclear: No direct, dated confirmation the specific size-truncation bug is fixed, since Yahoo's endpoint behavior is undocumented and can regress.
    - Recommendation: Planner should include a first-task smoke test (`yf.screen("day_gainers", count=50)` and assert row count) before building the rest of the poller on top of it. If it fails, fall back to `finviz` immediately rather than debugging the wrapper.
+   - **Resolution:** Planned. Plan 00-02 Task 3 runs a live smoke test against the real yfinance and CoinGecko endpoints, asserting >=40 rows from each; if the stock leg returns fewer, the task directs the executor to swap `finviz` to primary and re-verify before Plan 00-03 is built on top of it.
 
 2. **Exact CoinGecko Demo plan rate limit (calls/min).**
    - What we know: Multiple sources cite 30 calls/min as the Demo-plan stable rate; one page suggested 100 calls/min; official docs defer to the pricing page and dashboard for exact figures.
    - What's unclear: The authoritative per-minute number without a live dashboard check post-signup.
    - Recommendation: Confirm in the CoinGecko developer dashboard once the demo key is created (a Phase 0 setup task); design the report script to pace calls at well under 30/min regardless, since Phase 0's total call volume (≤ ~100 tickers/day for closes, 1 markets call per 15 min) is far below any plausible limit.
+   - **Resolution:** Planned. Plan 00-01 Task 3 (CoinGecko demo key signup) includes a one-line dashboard rate-limit check as an optional verification step. No active pacing/throttling logic is added to sources.py or report.py beyond the existing per-call `timeout=10` — Phase 0's call volume (1 markets call per 15 minutes; ≤ ~100 close-price lookups/day from the report) sits far below even the lower-bound 30 calls/min figure, so this is confirmed informational, not a blocker.
 
 3. **Should the crypto poll also skip anything, or is 24/7 unconditional correct for CoinGecko?**
    - What we know: Crypto markets never close, so there is no equivalent "market hours" question for the CoinGecko leg — 24/7 polling is unambiguously correct there.
    - What's unclear: Nothing — this is settled, included for completeness since Q6 in the phase brief asked about "the stock poll" specifically.
    - Recommendation: No gating on the crypto side; only the stock side carries the market-hours design question (resolved in Pattern 3).
+   - **Resolution:** Confirmed. Plan 00-03 tags every crypto-sourced row `market_open=1` unconditionally (`test_crypto_rows_always_market_open_true`); only stock rows call `is_market_hours`. No gating logic exists on the crypto path.
 
 ## Environment Availability
 

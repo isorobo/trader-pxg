@@ -30,7 +30,9 @@ created: 2026-07-26
 - **After every task commit:** Run `python -m pytest tests/ -q -x`
 - **After every plan wave:** Run `python -m pytest tests/ -q`
 - **Before `/gsd:verify-work`:** Full suite must be green
-- **Max feedback latency:** 30 seconds
+- **Max feedback latency:** 30 seconds (applies to the mocked pytest suite only — see exemption below)
+
+**Live/manual command exemption:** The fast, mocked `pytest tests/` suite above is the only thing held to the 30-second feedback target. The following commands make real network calls or depend on wall-clock/OS state and are explicitly exempt from that target — they are one-off smoke or end-to-end checks, not part of the per-commit sampling loop: Plan 00-02 Task 3 (`python -m trader.ground_truth.smoke`, live yfinance + CoinGecko calls), Plan 00-04 Task 3 (`python -m trader.ground_truth.report` dry run against the real, empty `data/trader.db`), and Plan 00-05 Tasks 1-2 (`python -m trader.ground_truth.poll --once` and `python -m trader.ground_truth.report` against real, freshly-collected data). These run once per plan, not per task commit.
 
 ---
 

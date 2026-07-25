@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 25 July 2026)
 ## Current Position
 
 Phase: 0 of 0–10 (Ground Truth)
-Plan: 0 of TBD in current phase
-Status: Ready to plan (Phases 0 and 1 both have context)
-Last activity: 2026-07-26 — Phase 0 context gathered; planning Phase 0 next
+Plan: 0 of 5 in current phase
+Status: Ready to execute
+Last activity: 2026-07-26 — Phase 0 planned: 5 plans in 4 waves; research + validation done; checker passed after 1 revision
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -64,5 +64,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-07-26
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-accounts-data-plumbing/01-CONTEXT.md
+Stopped at: Phase 0 planned and verified; ready to execute
+Resume file: .planning/phases/00-ground-truth/00-01-PLAN.md

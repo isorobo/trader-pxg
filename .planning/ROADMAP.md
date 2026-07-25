@@ -32,7 +32,14 @@ The journey runs from free data collection to full-size automated trading in ele
   1. The scanner logs every flagged ticker with timestamp, price, and % gain to SQLite
   2. A daily report answers: of everything flagged this week, what % ended the day up vs dumped?
   3. The logger has run for two weeks minimum and keeps running
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 00-01-PLAN.md — Repo skeleton, pinned deps, .env + CoinGecko demo key
+- [ ] 00-02-PLAN.md — Snapshot schema (db.py) + stock/crypto source adapters (sources.py)
+- [ ] 00-03-PLAN.md — Poll orchestration (poll.py) + Task Scheduler registration
+- [ ] 00-04-PLAN.md — Daily report generator (report.py)
+- [ ] 00-05-PLAN.md — Live end-to-end verification + two-week monitoring checkpoint
 
 ### Phase 1: Accounts & Data Plumbing
 **Goal**: All access sorted before it is needed — brokers, exchanges, data, repo, database.
@@ -144,7 +151,7 @@ Phases execute in numeric order; Phase 0 runs continuously in the background, Ph
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 0. Ground Truth | 0/TBD | Not started | - |
+| 0. Ground Truth | 0/5 | Planned | - |
 | 1. Accounts & Data Plumbing | 0/TBD | Not started | - |
 | 2. Backtest Harness | 0/TBD | Not started | - |
 | 3. Strategy Lab | 0/TBD | Not started | - |
