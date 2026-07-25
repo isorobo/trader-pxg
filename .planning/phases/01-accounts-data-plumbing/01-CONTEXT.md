@@ -34,6 +34,12 @@ Decisions below were auto-selected (recommended defaults) because this session r
 - **D-10:** The exit-criterion function: `get_daily_bars(symbol, start=None, end=None) -> DataFrame` with columns `ts, open, high, low, close, volume`. Asset class resolves from the instruments table (fallback: explicit `asset_class=` argument), and routing picks the stock or crypto fetcher.
 - **D-11:** Return type is a pandas DataFrame indexed by date, UTC timestamps. Later phases (point-in-time iterator) build on this shape.
 
+### Memecoin Handling
+- **D-15:** The memecoin universe is Kraken-listed tokens only (DOGE, SHIB, PEPE, BONK, WIF, and similar). On-chain/DEX tokens are out of scope — no venue access, and the Phase 4 risk gate would reject them on volume and listing age.
+- **D-16:** `instruments.asset_class` distinguishes `stock`, `crypto_major`, and `memecoin`, with an `override` column for manual reclassification. Classification happens at insert time via a market-cap/category heuristic (CoinGecko category as source); the researcher confirms the exact heuristic. Slippage models, exit profiles, and the 10% memecoin cap in later phases all key off this tag.
+- **D-17:** Memecoin daily bars flow through the same CCXT → SQLite path as majors. Short history for recent listings is expected and stored as-is — the risk gate's min-listing-age check consumes it in Phase 4.
+- **D-18:** The Phase 1 exit criterion stays "majors work with one function call"; memecoins must work through the same call but do not gate phase completion.
+
 ### Secrets & Account Setup
 - **D-12:** All keys live in `.env` (gitignored, standing rule 3). A committed `.env.example` documents the expected names: `KRAKEN_API_KEY`, `KRAKEN_API_SECRET`, `IBKR_*`, `TELEGRAM_*` (future).
 - **D-13:** Kraken API keys are created with trade and query permissions only — withdrawal permission stays off, and the plan includes a manual verification step for this.
@@ -86,6 +92,7 @@ Decisions below were auto-selected (recommended defaults) because this session r
 - Postgres/Timescale migration — only when SQLite hurts
 - Phase 0 snapshot logger build — Phase 0 scope; Phase 1 only leaves the database ready for it
 - Telegram alerting — Phase 5 scope; `.env.example` reserves the key names now
+- DEX/on-chain memecoin venue — new capability, its own phase if ever wanted; current universe is Kraken-listed only
 
 </deferred>
 

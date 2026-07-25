@@ -5,7 +5,7 @@
 
 **Date:** 2026-07-26
 **Phase:** 1-accounts-data-plumbing
-**Areas discussed:** Historical data source, Repo structure & tooling, Database layout, Data access API shape, Secrets & account setup
+**Areas discussed:** Historical data source, Repo structure & tooling, Database layout, Data access API shape, Secrets & account setup, Memecoin handling
 **Mode:** Auto-selected recommended defaults (non-interactive session). Every selection below is overridable before planning.
 
 ---
@@ -69,6 +69,17 @@
 **Choice:** `.env` with standardized names; account applications tracked as a checklist and started early because approvals take days.
 
 ---
+
+## Memecoin Handling (raised by owner)
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| Kraken-listed memecoins via existing CCXT path, tagged in instruments | Same plumbing as majors; asset_class tag drives later slippage/caps/gates | ✓ |
+| Include on-chain/DEX tokens | No venue access; risk gate would reject most on volume and listing age | |
+| Exclude memecoins from Phase 1 entirely | Would force schema rework in Phase 2–4 when slippage classes and caps need the tag | |
+
+**Choice:** Kraken-listed only; `asset_class` column (`stock` / `crypto_major` / `memecoin`) with manual override; classification heuristic from CoinGecko category, confirmed by researcher; exit criterion still gates on majors.
+**Notes:** Owner asked "what about memecoins" after initial auto-pass. DEX venue support noted as a potential future phase, not current scope.
 
 ## Claude's Discretion
 
