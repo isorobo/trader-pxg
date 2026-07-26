@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 25 July 2026)
 ## Current Position
 
 Phase: 0 of 0–10 (Ground Truth)
-Plan: 1 of 6 in Phase 1 (Phase 0 monitoring in background to 2026-08-09)
-Status: Phase 1 executing — wave 1 of 3
-Last activity: 2026-07-26 — Plan 01-01 complete (migrations + instruments/bars schema, 29/29 tests); 01-03 account checkpoint next
+Plan: 3 of 6 in Phase 1 (01-03 checkpoint open: awaiting IR + IBKR confirmation; Phase 0 monitoring to 2026-08-09)
+Status: Phase 1 executing — wave 2 of 3
+Last activity: 2026-07-26 — Plan 01-02 complete (classifier + onboarding, 37/37 tests, live smoke passed); 01-04 running
 
 Progress: [█░░░░░░░░░] 9%
 
