@@ -35,7 +35,10 @@ def test_migration_0002_creates_instruments_and_bars(data_conn):
     max_version = data_conn.execute(
         "SELECT MAX(version) FROM schema_version"
     ).fetchone()[0]
-    assert max_version == 2
+    # >= 2, not == 2: apply_migrations applies every migrations/*.sql file
+    # present, and later phases (e.g. 0003_backtest.sql) add further
+    # versions on top of 0002 without changing 0002's own guarantees.
+    assert max_version >= 2
 
 
 def test_bars_unique_constraint(data_conn):
