@@ -286,8 +286,17 @@ def test_is_entry_halted_false_again_only_after_clear_entry_halt(paper_conn, tmp
 # ---------------------------------------------------------------------------
 
 
-def test_run_reconcile_once_records_unexplained_and_halts(paper_conn, fake_ib):
+def test_run_reconcile_once_records_unexplained_and_halts(
+    paper_conn, fake_ib, tmp_path, monkeypatch
+):
     from trader.paper import broker_ibkr, reconcile
+
+    # alerts.notify() falls back to ops_log.append_ops_log at its default
+    # relative path when Telegram isn't configured -- chdir into tmp_path so
+    # this test never writes into the real project's ops/ directory.
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
 
     fake_ib.positions.return_value = [_make_fake_position("AAPL", 10)]
     adapter = broker_ibkr.IBKRBrokerAdapter(ib_client=fake_ib)
@@ -307,7 +316,7 @@ def test_run_reconcile_once_records_unexplained_and_halts(paper_conn, fake_ib):
 
 def test_run_reconcile_once_no_divergence_when_positions_match(paper_conn, fake_ib):
     from trader.paper import broker_ibkr, ledger, reconcile
-    from trader.backtest.config import EXIT_PROFILE
+    from trader.backtest.config import PROFILE_TIME_STOP_1D
 
     ledger.record_order(
         paper_conn, "s:AAPL:2026-07-27:buy:entry", "strat_a", "AAPL",
@@ -315,7 +324,7 @@ def test_run_reconcile_once_no_divergence_when_positions_match(paper_conn, fake_
     )
     ledger.open_position(
         paper_conn, "strat_a", "AAPL", "ibkr_paper", "equity", 10, 190.0,
-        "2026-07-27T00:00:00Z", "s:AAPL:2026-07-27:buy:entry", EXIT_PROFILE,
+        "2026-07-27T00:00:00Z", "s:AAPL:2026-07-27:buy:entry", PROFILE_TIME_STOP_1D,
     )
     fake_ib.positions.return_value = [_make_fake_position("AAPL", 10)]
     adapter = broker_ibkr.IBKRBrokerAdapter(ib_client=fake_ib)
