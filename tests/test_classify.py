@@ -7,6 +7,8 @@ from unittest.mock import patch
 import pytest
 import requests
 
+from trader.data import db
+
 try:
     from trader.data import classify
 except ImportError:
@@ -68,3 +70,60 @@ def test_classify_handles_missing_categories_key():
     with patch("trader.data.classify.requests.get", return_value=fake_response):
         result = classify.classify_crypto_instrument("bitcoin", "fake-key")
     assert result == "crypto_major"
+
+
+@pytest.fixture
+def data_conn(tmp_db_path):
+    """A live connection to a fresh temp DB, bootstrapped via trader.data.db."""
+    connection = db.get_connection(tmp_db_path)
+    yield connection
+    connection.close()
+
+
+def test_register_crypto_instrument_classifies_and_persists(data_conn):
+    with patch(
+        "trader.data.classify.classify_crypto_instrument", return_value="memecoin"
+    ) as mock_classify:
+        result = classify.register_crypto_instrument(
+            data_conn, "DOGE/USDT", "binance", "dogecoin"
+        )
+
+    mock_classify.assert_called_once()
+    call_args = mock_classify.call_args[0]
+    assert call_args[0] == "dogecoin"
+
+    assert result == "memecoin"
+    instrument = db.get_instrument(data_conn, "DOGE/USDT", "binance")
+    assert instrument is not None
+    assert instrument["asset_class"] == "memecoin"
+    assert instrument["coingecko_id"] == "dogecoin"
+
+
+def test_register_crypto_instrument_override_skips_classification(data_conn):
+    with patch(
+        "trader.data.classify.classify_crypto_instrument",
+        side_effect=AssertionError("classify_crypto_instrument should not be called"),
+    ):
+        result = classify.register_crypto_instrument(
+            data_conn, "XYZ/USDT", "binance", "some-id", override="crypto_major"
+        )
+
+    assert result == "crypto_major"
+    instrument = db.get_instrument(data_conn, "XYZ/USDT", "binance")
+    assert instrument is not None
+    assert instrument["asset_class"] == "crypto_major"
+    assert instrument["override"] == "crypto_major"
+
+
+def test_register_crypto_instrument_is_idempotent(data_conn):
+    with patch(
+        "trader.data.classify.classify_crypto_instrument", return_value="memecoin"
+    ):
+        classify.register_crypto_instrument(data_conn, "DOGE/USDT", "binance", "dogecoin")
+        classify.register_crypto_instrument(data_conn, "DOGE/USDT", "binance", "dogecoin")
+
+    rows = data_conn.execute(
+        "SELECT COUNT(*) FROM instruments WHERE symbol = ? AND venue = ?",
+        ("DOGE/USDT", "binance"),
+    ).fetchone()
+    assert rows[0] == 1
