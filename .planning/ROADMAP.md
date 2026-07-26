@@ -127,13 +127,13 @@ Plans:
 **Plans**: 9 plans
 
 Plans:
-- [ ] 05-01-PLAN.md — Migration 0005 + frozen config.py (5 live strategy configs) + idempotency.py + ledger.py (PAPER-03, PAPER-05)
-- [ ] 05-02-PLAN.md — NYSE trading calendar + Telegram alerts + rotating ops log (PAPER-06, PAPER-07)
-- [ ] 05-03-PLAN.md — IBKR paper-broker adapter (mockable, whole-share rounding) + crypto sim adapter (PAPER-01, PAPER-02)
-- [ ] 05-04-PLAN.md — Reconciliation classification + combined halt gate + human-only clear_halt CLI (PAPER-04)
-- [ ] 05-05-PLAN.md — Guardian: exit evaluation both venues + D-01 rolling kill-condition auto-retire (PAPER-02)
-- [ ] 05-06-PLAN.md — Entry pipeline: scan->gate->sizer->round->idempotency->submit->ledger->alert (PAPER-01)
-- [ ] 05-07-PLAN.md — Daily report paper-trading section + crash-recovery integration proof + full-suite green (PAPER-07)
+- [x] 05-01-PLAN.md — Migration 0005 + frozen config.py (5 live strategy configs) + idempotency.py + ledger.py (PAPER-03, PAPER-05)
+- [x] 05-02-PLAN.md — NYSE trading calendar + Telegram alerts + rotating ops log (PAPER-06, PAPER-07)
+- [x] 05-03-PLAN.md — IBKR paper-broker adapter (mockable, whole-share rounding) + crypto sim adapter (PAPER-01, PAPER-02)
+- [x] 05-04-PLAN.md — Reconciliation classification + combined halt gate + human-only clear_halt CLI (PAPER-04)
+- [x] 05-05-PLAN.md — Guardian: exit evaluation both venues + D-01 rolling kill-condition auto-retire (PAPER-02)
+- [x] 05-06-PLAN.md — Entry pipeline: scan->gate->sizer->round->idempotency->submit->ledger->alert (PAPER-01)
+- [x] 05-07-PLAN.md — Daily report paper-trading section + crash-recovery integration proof + full-suite green (PAPER-07)
 - [ ] 05-08-PLAN.md — Checkpoint: IB Gateway install/login/API-enable + Telegram bot setup (PAPER-01, PAPER-06)
 - [ ] 05-09-PLAN.md — Checkpoint: Task Scheduler registration + first supervised paper order + open two-week monitoring window (PAPER-01, PAPER-03, PAPER-04, PAPER-07)
 
