@@ -7,3 +7,5 @@ ruff==0.16.0
 ccxt==4.5.68
 pandas==3.0.5
 hypothesis==6.161.5
+ib_async==2.1.0
+pandas-market-calendars==5.4.0
