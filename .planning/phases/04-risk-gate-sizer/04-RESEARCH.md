@@ -427,22 +427,25 @@ def trailing_median_dollar_volume(bars_df: pd.DataFrame, window: int) -> float:
 | A8 | Breaker HWM recomputed incrementally from the equity series rather than persisted as its own stored value | Q4 | Low risk — this is the safer of the two designs per D-05/standing rule 4, but does mean every evaluation re-scans the equity history (fine at this project's scale) |
 | A9 | `score: float` is Phase 4's own required candidate-dict field, populated by whatever upstream caller invokes the gate — decoupled from Phase 3's `pick_entries` output and Phase 5's future ranker | Pitfall 4 / Open Questions | If the planner instead assumes Phase 5's ranker already exists and will supply scores, task sequencing could create a dependency Phase 4 doesn't actually need |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Where does `score` come from at gate-evaluation time, given Phase 5's "scanner → gate → ranker → sizer" pipeline order?**
    - What we know: D-02's correlation rule needs a score to break ties at gate time; Phase 3's strategies don't emit one; Phase 5's own documented order places the ranker *after* the gate.
    - What's unclear: whether this is an intentional design (Phase 4 defines its own lightweight score input, decoupled from the "real" ranker) or a sequencing question Phase 5 needs to resolve later.
    - Recommendation: treat it as Phase 4's own contract (Assumption A9) — the gate/sizer's pure functions simply require a `score: float` field on each candidate dict, and Phase 4's tests populate it directly. Flag this for the owner/planner to confirm, since it has downstream implications for how Phase 5 wires its ranker.
+   - **RESOLVED:** Implemented as Phase 4's own candidate-dict contract in `trader/risk/config.py`'s module docstring (source-agnostic `score: float` field, per D-06); no coupling to Phase 3's `pick_entries` or Phase 5's ranker.
 
 2. **Should freed/capped sizer weight ever redistribute to other accepted positions, or always flow to cash?**
    - What we know: the phase document specifies the caps themselves but not an interaction order.
    - What's unclear: whether a "redistribute to survivors" design is what the owner actually intended when caps bind.
    - Recommendation: default to "flows to cash" (Q3/A6) for simplicity and conservatism; confirm with the owner before treating this as locked, since it's the highest-impact assumption in this document.
+   - **RESOLVED:** Locked as "flows to cash, never redistributed" for Plan 04-03's sizer implementation, per Q3's select→weight→normalize→cap→re-cap→cash-absorbs-remainder order.
 
 3. **Exact static per-asset-class spread estimates for the max-spread check (RISK-01).**
    - What we know: D-02 says "static per-asset-class estimates for now — live spread checks are a Phase 5 concern."
    - What's unclear: this research did not find or pin specific spread-percentage numbers (analogous to `SLIPPAGE_PCT` in `trader/backtest/config.py`) — the phase document's slippage numbers (stock 0.05%, crypto_major 0.10%, memecoin 4.0%) are a plausible proxy since spread and slippage are related but not identical concepts.
    - Recommendation: the planner should either reuse `trader/backtest/config.py`'s existing `SLIPPAGE_PCT` values directly as spread proxies (simplest, keeps one source of truth) or ask the owner for distinct spread-specific numbers — this research recommends the former for consistency and lower maintenance surface, flagged `[ASSUMED]`.
+   - **RESOLVED:** Implemented in `trader/risk/config.py` as `MAX_SPREAD_PCT = dict(SLIPPAGE_PCT)`, importing `SLIPPAGE_PCT` from `trader.backtest.config` directly rather than retyping its values.
 
 ## Environment Availability
 
