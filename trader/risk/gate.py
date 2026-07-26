@@ -107,6 +107,78 @@ def _first_failing_check(entry: dict, config) -> str | None:
     return None
 
 
+def _windowed_returns(bars: list[dict], window_days: int) -> pd.Series:
+    """Simple daily returns, indexed by calendar date (ts), restricted to
+    the trailing ``window_days`` calendar days of this bars list's own
+    history (04-RESEARCH.md Q2: 60 calendar days of daily-return
+    observations, not 60 bars).
+    """
+    ts = pd.to_datetime([bar["ts"] for bar in bars])
+    closes = pd.Series([bar["close"] for bar in bars], index=ts).sort_index()
+    if len(closes) == 0:
+        return pd.Series(dtype=float)
+    cutoff = closes.index.max() - pd.Timedelta(days=window_days - 1)
+    windowed = closes[closes.index >= cutoff]
+    return windowed.pct_change().dropna()
+
+
+def _pairwise_correlation(
+    bars_a: list[dict],
+    bars_b: list[dict],
+    config,
+) -> float | None:
+    """Pearson correlation of two candidates' daily returns, inner-joined
+    on calendar date (never a positional index -- 04-RESEARCH.md Pitfall
+    1). Returns None if the joined overlap is below
+    ``config.CORRELATION_MIN_OVERLAP`` (indeterminate, not a rejection).
+    """
+    returns_a = _windowed_returns(bars_a, config.CORRELATION_WINDOW_DAYS)
+    returns_b = _windowed_returns(bars_b, config.CORRELATION_WINDOW_DAYS)
+    aligned = pd.concat([returns_a, returns_b], axis=1, join="inner")
+    if len(aligned) < config.CORRELATION_MIN_OVERLAP:
+        return None
+    return aligned.iloc[:, 0].corr(aligned.iloc[:, 1])
+
+
+def _apply_correlation_check(
+    accepted: list[dict],
+    market_data: dict,
+    config,
+) -> tuple[list[dict], list[dict]]:
+    """Greedy sequential elimination over the accepted set's pairwise
+    correlations (04-RESEARCH.md Q2): sort pairs exceeding
+    ``config.CORRELATION_THRESHOLD`` by correlation magnitude descending,
+    walk once, reject the lower-scored member of each still-live pair.
+
+    Returns ``(survivors, correlation_rejections)``.
+    """
+    pairs = []
+    for i in range(len(accepted)):
+        for j in range(i + 1, len(accepted)):
+            a, b = accepted[i], accepted[j]
+            key_a = (a["symbol"], a["venue"])
+            key_b = (b["symbol"], b["venue"])
+            corr = _pairwise_correlation(
+                market_data[key_a]["bars"], market_data[key_b]["bars"], config
+            )
+            if corr is not None and abs(corr) > config.CORRELATION_THRESHOLD:
+                pairs.append((abs(corr), i, j))
+
+    pairs.sort(key=lambda p: p[0], reverse=True)
+
+    survivor_indices = set(range(len(accepted)))
+    rejected: list[dict] = []
+    for _corr, i, j in pairs:
+        if i not in survivor_indices or j not in survivor_indices:
+            continue
+        loser = i if accepted[i]["score"] < accepted[j]["score"] else j
+        survivor_indices.discard(loser)
+        rejected.append({**accepted[loser], "reason_code": REJECT_CORRELATION})
+
+    survivors = [accepted[i] for i in range(len(accepted)) if i in survivor_indices]
+    return survivors, rejected
+
+
 def apply_risk_gate(
     candidates: list[dict],
     market_data: dict,
@@ -134,5 +206,10 @@ def apply_risk_gate(
                     "exit_profile_tag": entry["asset_class"],
                 }
             )
+
+    accepted, correlation_rejections = _apply_correlation_check(
+        accepted, market_data, config
+    )
+    rejected.extend(correlation_rejections)
 
     return accepted, rejected
