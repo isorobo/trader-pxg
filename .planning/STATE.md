@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 25 July 2026)
 ## Current Position
 
 Phase: 0 of 0–10 (Ground Truth)
-Plan: Phase 1 build complete (6/6); Phase 2 discussion next
-Status: Phase 1 human_needed (3 account items in 01-HUMAN-UAT.md); Phase 0 monitoring to 2026-08-09; advancing to Phase 2
-Last activity: 2026-07-26 — Phase 1 verified: 20/20 code must-haves, no gaps; trader-pxg repo inspected (empty, nothing to ingest)
+Plan: Phase 2 COMPLETE (10/10, verification passed 7/7); Phase 3 discussion next
+Status: Phase 2 closed — first fully closed phase. Phase 0 monitoring to 2026-08-09; Phase 1 human_needed (accounts). Advancing to Phase 3
+Last activity: 2026-07-26 — Phase 2 verified passed: 150 tests, sanity gate non-circular, e2e report real
 
-Progress: [██░░░░░░░░] 18%
+Progress: [███░░░░░░░] 29%
 
 ## Performance Metrics
 

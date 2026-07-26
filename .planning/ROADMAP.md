@@ -12,7 +12,7 @@ The journey runs from free data collection to full-size automated trading in ele
 
 - [ ] **Phase 0: Ground Truth** - Snapshot logger for gainers; runs in background forever
 - [ ] **Phase 1: Accounts & Data Plumbing** - All access sorted before it is needed
-- [ ] **Phase 2: Backtest Harness** - The honest machine: point-in-time data, fees, slippage, sanity tests
+- [x] **Phase 2: Backtest Harness** (completed 2026-07-26) - The honest machine: point-in-time data, fees, slippage, sanity tests
 - [ ] **Phase 3: Strategy Lab** - Backtest everything; keep survivors, kill the rest cheaply
 - [ ] **Phase 4: Risk Gate & Sizer** - The safety layer, built before anything can trade
 - [ ] **Phase 5: Paper Trading Loop** - Full pipeline live on fake money, unattended overnight
@@ -173,7 +173,7 @@ Phases execute in numeric order; Phase 0 runs continuously in the background, Ph
 |-------|----------------|--------|-----------|
 | 0. Ground Truth | 5/5 | Monitoring (DATA-04 window to 2026-08-09) | - |
 | 1. Accounts & Data Plumbing | 0/6 | Planned | - |
-| 2. Backtest Harness | 0/10 | Planned | - |
+| 2. Backtest Harness | 10/10 | Complete | 2026-07-26 |
 | 3. Strategy Lab | 0/TBD | Not started | - |
 | 4. Risk Gate & Sizer | 0/TBD | Not started | - |
 | 5. Paper Trading Loop | 0/TBD | Not started | - |
