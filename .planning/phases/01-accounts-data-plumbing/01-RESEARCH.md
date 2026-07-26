@@ -302,11 +302,14 @@ def classify_crypto_instrument(coingecko_id: str, api_key: str) -> str:
     return "memecoin" if "Meme" in categories else "crypto_major"
 ```
 
+**Onboarding note (added in plan revision):** `classify_crypto_instrument` is a pure classification function only — it never persists anything. Phase 1's planner wires a companion `register_crypto_instrument(conn, symbol, venue, coingecko_id, override=None)` in `trader/data/classify.py` that calls `classify_crypto_instrument` (unless `override` is given) and then `db.upsert_instrument`, so D-16's "classification happens at insert time" is satisfied by an explicit onboarding call, not left as dead code.
+
 ### Anti-Patterns to Avoid
 - **Trusting D-11's "UTC timestamps" to mean yfinance's raw index is already UTC:** It is not — live-verified as `America/New_York`. Convert explicitly (Pattern 2).
 - **Fetching from Kraken for depth:** Kraken's OHLC REST endpoint cannot return more than 720 of the most recent candles regardless of `since` — confirmed by official Kraken documentation. Do not attempt to page backward past this; the data does not exist through that endpoint.
 - **Re-running the CoinGecko classification lookup on every bar fetch:** Wastes a scarce, rate-limited call (empirically 429'd after ~5 unauthenticated requests in this session) for data that never changes after insert. Cache the result in `instruments.asset_class`.
-- **Labelling `bars.venue` as `"kraken"` for Binance-sourced data to make Phase 2's fee lookup simpler:** This conflates data provenance with fee-schedule assumption and will confuse debugging later (a stored "kraken" bar that was never actually fetched from Kraken). Record the true source venue in `bars.venue`; let Phase 2's fee model key off `asset_class`, which is D-02's actual intent ("fees still model as Kraken" is a modelling decision, not a data-provenance claim). Flagged as an open question below for explicit confirmation.
+- **Labelling `bars.venue` as `"kraken"` for Binance-sourced data to make Phase 2's fee lookup simpler:** This conflates data provenance with fee-schedule assumption and will confuse debugging later (a stored "kraken" bar that was never actually fetched from Kraken). Record the true source venue in `bars.venue`; let Phase 2's fee model key off `asset_class`, which is D-02's actual intent ("fees still model as Kraken" is a modelling decision, not a data-provenance claim). This is now a locked planning decision — see Open Questions #1 (RESOLVED) below.
+- **Leaving `classify_crypto_instrument` uncalled:** Writing the classification function without a caller silently violates D-16 ("classification happens at insert time"). Every crypto symbol that enters `instruments` for the first time must go through `register_crypto_instrument`, not a raw `db.upsert_instrument` call that skips classification (the only sanctioned exception is when `override` is explicitly supplied, or when no CoinGecko id can be derived for a symbol outside the researched universe — see 01-06-PLAN.md's `resolve_instrument`).
 
 ## Don't Hand-Roll
 
@@ -348,7 +351,7 @@ def classify_crypto_instrument(coingecko_id: str, api_key: str) -> str:
 ### Pitfall 5: Confusing data-source venue with fee-model venue in the `bars` table
 **What goes wrong:** If `bars.venue` is set to `"kraken"` for data actually fetched from Binance (to make a future fee-model join simpler), any later debugging of a data-quality issue will look at the wrong exchange's status page, rate limits, and outage history.
 **Why it happens:** D-02 states fees still model as Kraken regardless of where the daily-bar data physically came from; conflating the two columns' semantics is an easy shortcut that saves a join in Phase 2 but costs traceability from Phase 1 onward.
-**How to avoid:** Store the true fetch venue (`"binance"`, `"yfinance"`, or `"kraken"` for the fallback path) in `bars.venue`. Let Phase 2's fee model look up fee schedule by `instruments.asset_class`, not by `bars.venue` — see Open Questions for the explicit confirmation this needs before Phase 2 begins.
+**How to avoid:** Store the true fetch venue (`"binance"`, `"yahoo"`, or `"kraken"` for the fallback path) in `bars.venue`. Let Phase 2's fee model look up fee schedule by `instruments.asset_class`, not by `bars.venue` — see Open Questions #1 (RESOLVED) below.
 **Warning signs:** A `bars` row with `venue='kraken'` for a symbol whose earliest date predates Kraken's 720-day cap — a direct contradiction that only becomes visible if provenance was recorded honestly.
 
 ## Code Examples
@@ -402,7 +405,7 @@ def fetch_crypto_bars(symbol: str, since_ms: int) -> list[list]:
 | A1 | Binance's public market-data endpoints remain reachable from the owner's NZ residential IP with no geo-block, matching this session's test environment | Standard Stack, Architecture Patterns | If Binance ever blocks NZ IPs for market data (currently only Binance's self-custody Web3 Wallet feature is NZ-restricted per WebSearch, not spot market data), fall back to Kraken (720-day cap) or CoinGecko's `market_chart` endpoint (365-day free-tier cap per official docs) — both already documented as fallbacks above |
 | A2 | CoinGecko Demo-plan (keyed) rate limit is approximately 100 calls/min per the pricing page, versus the empirically-confirmed sub-10-call unauthenticated limit | Common Pitfalls #3 | If the keyed limit is materially lower than 100/min, a large instrument-classification backfill could still 429; mitigate by pacing calls with a short sleep regardless of the stated limit, since Phase 1's total classification-call volume (one call per new instrument, ever) is tiny |
 | A3 | The category id `meme-token` (display name "Meme") is CoinGecko's stable, canonical tag for memecoins, rather than one of several overlapping sub-categories (`ai-meme-coins`, `dog-themed`, etc.) that a coin might carry instead of or in addition to it | Architecture Patterns Pattern 4 | If a genuine Kraken-listed memecoin lacks the literal `"Meme"` string in its category list (e.g., tagged only `"Dog-Themed"`), it would be misclassified as `crypto_major`; the `override` column (D-16) is the documented escape hatch — recommend the planner add a manual review step for the five named memecoins specifically, all of which were live-confirmed to carry `"Meme"` in this session |
-| A4 | `bars.venue` should record true data provenance (e.g., `"binance"`) rather than the fee-model venue (`"kraken"`) for crypto rows | Pitfall 5 | This is a naming/semantics recommendation, not yet confirmed against the owner's intent for D-08's `venue` column; if the owner actually wants `venue` to mean "fee/execution venue" uniformly, the schema needs a second column (e.g., `source`) to hold true provenance — flagged as an open question below |
+| A4 | `bars.venue` should record true data provenance (e.g., `"binance"`) rather than the fee-model venue (`"kraken"`) for crypto rows | Pitfall 5 | This was a naming/semantics recommendation at research time; RESOLVED during planning — see Open Questions #1 below. The orchestrator locked true provenance (`"yahoo"`/`"binance"`) into `bars.venue` for Plans 01-05/01-06 |
 | A5 | Independent Reserve's KYC approval turnaround (beyond the ~20-minute submission time) was not found in this session's searches | Account Setup Specifics | If approval takes materially longer than IBKR's or Kraken's, the phase's "start early" framing (D-14) is even more important; no code impact, purely a timeline-planning risk |
 
 **If this table is empty:** N/A — see entries above.
@@ -478,124 +481,23 @@ CREATE TABLE IF NOT EXISTS bars (
 ```
 Matches D-08's exact column list and unique-key design. `ts` as a plain date string (not a datetime, not a Unix timestamp) sidesteps the tz-mismatch pitfall between `yfinance` (`America/New_York`) and `ccxt` (UTC milliseconds) — both normalise to the same string format before insert (Pattern 2).
 
-**Open question on `venue` semantics:** see Assumption A4 and Pitfall 5 — confirm with the owner during planning whether `bars.venue` should record true data provenance (recommended) or the fee-model venue, before Phase 2 builds its fee lookup against this column.
+**`venue` semantics:** RESOLVED — see Open Questions #1 below. `bars.venue` records true data provenance (`"yahoo"` for stock rows, `"binance"` for crypto rows), never the Kraken fee-model venue.
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+All three items below were open at research time. Each is now resolved for planning purposes; resolutions are recorded inline so execution does not need to re-derive them.
 
 1. **Should `bars.venue` record true data provenance (e.g., `"binance"`) or the fee-model venue (`"kraken"`) for crypto rows?**
    - What we know: D-02 explicitly decouples data source from fee-model assumption ("fees still model as Kraken" regardless of where daily bars are fetched from).
    - What's unclear: Whether D-08's `venue` column was intended to mean "where this data came from" or "which exchange this instrument trades/is fee-modelled on."
-   - Recommendation: Record true provenance in `bars.venue` (Pitfall 5); if the owner wants a fee-model venue too, add a resolved lookup in `instruments` (e.g., `fee_venue` defaulting to `"kraken"` for all crypto) rather than overloading `bars.venue`. Flag for the owner during `/gsd:plan-phase` or a quick discuss-phase follow-up if not already obvious from the planner's read of D-02.
+   - **RESOLUTION (orchestrator-locked during planning):** `bars.venue` records true data provenance — `"yahoo"` for stock rows, `"binance"` for crypto rows. Kraken remains the fee-model venue used only by Phase 2's fee lookup (keyed off `instruments.asset_class`, not `bars.venue`), with no coupling to this column in Phase 1. Implemented in 01-04-PLAN.md (stock fetcher, venue="yahoo") and 01-05/01-06-PLAN.md (crypto fetcher, `CRYPTO_VENUE = "binance"`).
 
 2. **Independent Reserve's KYC approval turnaround time.**
    - What we know: Initial submission takes about 20 minutes.
    - What's unclear: How long the exchange itself takes to approve the submission — no figure found in this session's searches.
-   - Recommendation: Treat as a "submitted, awaiting approval" checklist state per D-14; no phase-blocking impact since this account is not needed until Phase 9.
+   - **RESOLUTION:** Non-blocking regardless of the answer. Per D-14, the Phase 1 checklist (01-03-PLAN.md) tracks "submitted" as sufficient progress — no code or later phase depends on Independent Reserve approval until Phase 9's NZD funding ramp. The unknown turnaround time carries zero phase-completion risk.
 
 3. **Exact CoinGecko Demo-plan rate limit (calls/min) for keyed requests.**
    - What we know: The pricing/support pages cite approximately 100 calls/min for the free Demo plan (per WebSearch synthesis); Phase 0's own research flagged a conflicting 30/min figure from a different source.
    - What's unclear: The authoritative, current number without checking the CoinGecko developer dashboard directly (already a follow-up noted in Phase 0's research).
-   - Recommendation: Phase 1's classification-call volume is tiny (one call per new instrument, ever), so this is low-risk regardless of which figure is correct — pace defensively (a short sleep between calls during any batch backfill) rather than resolving the exact number.
-
-## Environment Availability
-
-| Dependency | Required By | Available | Version | Fallback |
-|------------|--------------|-----------|---------|----------|
-| Python | Entire phase | Yes (per phase brief and this session's live `.venv` test) | 3.12 (project venv) / 3.14 (research-session global interpreter) | — |
-| `yfinance` | Stock bars | Yes — already installed, live-tested | 1.5.2 | — |
-| `ccxt` | Crypto bars | Yes — installed and live-tested in this session | 4.5.68 | — |
-| Internet access to `query1/2.finance.yahoo.com` | Stock bars | Yes — live-tested successfully in this session | — | none needed |
-| Internet access to `api.binance.com` | Crypto bars (primary) | Yes — live-tested successfully in this session (loaded markets, fetched OHLCV) | — | Kraken via `ccxt` (720-day cap) or CoinGecko `market_chart` (365-day free-tier cap) |
-| Internet access to `api.coingecko.com` | Instrument classification | Yes — live-tested, though unauthenticated requests hit 429 quickly (see Pitfall 3) | — | Already-provisioned `COINGECKO_API_KEY` from Phase 0 raises the effective limit |
-| SQLite (stdlib `sqlite3`) | Persistence | Yes — bundled with Python 3.12 | stdlib | — |
-| IBKR, Kraken, Independent Reserve accounts | ACCT-01/02/03 | Not yet — human tasks, tracked as checklist per D-14 | — | none; these are prerequisites for later phases only, not for ACCT-04/06/07 |
-
-**Missing dependencies with no fallback:** none identified for the code-facing requirements (ACCT-04, ACCT-06, ACCT-07).
-**Missing dependencies with fallback:** Binance reachability (Kraken/CoinGecko fallback documented above); account approvals (no fallback needed — they are human-timeline items, not blockers for the code work per D-14).
-
-## Validation Architecture
-
-### Test Framework
-| Property | Value |
-|----------|-------|
-| Framework | pytest 9.1.1 (already established by Phase 0) |
-| Config file | `pyproject.toml` `[tool.pytest.ini_options]` (already exists, `testpaths = ["tests"]`) |
-| Quick run command | `pytest tests/ -x -k "not integration"` |
-| Full suite command | `pytest tests/` |
-
-### Phase Requirements → Test Map
-| Req ID | Behaviour | Test Type | Automated Command | File Exists? |
-|--------|-----------|-----------|--------------------|--------------|
-| ACCT-04 | Stock fetcher normalises `yfinance`'s tz-aware index to a UTC date string | unit (mocked `yfinance.Ticker.history`) | `pytest tests/test_data_api.py::test_stock_bars_normalize_to_utc_date -x` | No — Wave 0 |
-| ACCT-04 | Crypto fetcher paginates past Binance's 1000-candle limit correctly | unit (mocked `ccxt` exchange) | `pytest tests/test_data_api.py::test_crypto_bars_paginate_past_1000 -x` | No — Wave 0 |
-| ACCT-06 | `instruments` and `bars` tables created via migration, `schema_version` advances | unit (temp SQLite file) | `pytest tests/test_db.py::test_migration_0002_creates_instruments_and_bars -x` | No — Wave 0 |
-| ACCT-06 | `bars` unique constraint rejects a duplicate `(venue, symbol, timeframe, ts)` insert | unit | `pytest tests/test_db.py::test_bars_unique_constraint -x` | No — Wave 0 |
-| ACCT-07 | `get_daily_bars('AAPL')` returns a DataFrame with the exact contract columns | unit (mocked fetch, cache pre-seeded) | `pytest tests/test_data_api.py::test_get_daily_bars_stock_contract -x` | No — Wave 0 |
-| ACCT-07 | `get_daily_bars('DOGE/USD')` (or equivalent) returns a DataFrame via the crypto path | unit (mocked fetch, cache pre-seeded) | `pytest tests/test_data_api.py::test_get_daily_bars_crypto_contract -x` | No — Wave 0 |
-| ACCT-07 | A cache hit makes zero network calls | unit (mock asserts not called) | `pytest tests/test_data_api.py::test_cache_hit_skips_fetch -x` | No — Wave 0 |
-| ACCT-07 | A cache miss fetches, writes through, and a second call for the same range hits cache | integration (real cache-write path, mocked HTTP) | `pytest tests/test_data_api.py::test_cache_miss_then_cache_hit -x` | No — Wave 0 |
-| ACCT-01/02/03 | Account applications submitted | manual (not automatable) | Checklist item checked off in the plan, per D-14 | N/A |
-
-### Sampling Rate
-- **Per task commit:** `pytest tests/ -x -k "not integration"`
-- **Per wave merge:** `pytest tests/`
-- **Phase gate:** Full suite green, plus one live (non-mocked) smoke-test run of `get_daily_bars` for a real stock symbol and a real crypto pair, confirming the exit criterion end-to-end before `/gsd:verify-work`. Account checklist items (ACCT-01/02/03) gate on "submitted," not "approved" (D-14) — approval status is tracked but does not block marking the phase DONE per the phase document's own framing ("in progress or done").
-
-### Wave 0 Gaps
-- [ ] `tests/test_data_api.py` — covers ACCT-04, ACCT-07 (all rows above)
-- [ ] `tests/test_db.py` additions — covers ACCT-06 (instruments/bars migration, unique constraint)
-- [ ] `tests/conftest.py` additions — mocked `yfinance.Ticker`, mocked `ccxt.binance()` exchange instance, temp SQLite fixture reused from Phase 0's `conftest.py`
-- [ ] `migrations/` directory and a small runner — needed before `test_migration_0002_creates_instruments_and_bars` can pass
-- [ ] Framework: no new install needed (`pytest` already present)
-
-## Security Domain
-
-### Applicable ASVS Categories
-
-| ASVS Category | Applies | Standard Control |
-|----------------|---------|--------------------|
-| V2 Authentication | No | Phase 1 has no user-facing auth surface |
-| V3 Session Management | No | No sessions — library calls and short-lived scripts |
-| V4 Access Control | No | Single-operator local machine |
-| V5 Input Validation | Yes | Parameterised SQL only for all `instruments`/`bars` inserts (never string-formatted SQL); validate CoinGecko/Binance/Yahoo response shapes before writing |
-| V6 Cryptography | No direct need | The only secrets are API keys (`COINGECKO_API_KEY`, future `KRAKEN_API_KEY`/`KRAKEN_API_SECRET`); stored in `.env`, loaded via `python-dotenv`, no custom cryptography required |
-
-### Known Threat Patterns for this stack
-
-| Pattern | STRIDE | Standard Mitigation |
-|---------|--------|------------------------|
-| SQL injection via symbol/venue string interpolation | Tampering | Parameterised queries (`?` placeholders) for every `instruments`/`bars` statement, matching the Phase 0 `db.py` convention already in place |
-| Kraken API key with withdrawal permission enabled by accident | Elevation of Privilege | Manual verification step in the account-setup checklist (D-13); never enable "Withdraw Funds" on a key used by code — standing rule 3 |
-| Committed `.env` exposing `KRAKEN_API_KEY`/`KRAKEN_API_SECRET` | Information Disclosure | `.gitignore` already excludes `.env` and only tracks `.env.example`; verify the new Kraken key names are added to `.env.example` with empty values, never real ones |
-| Untrusted third-party response data (Yahoo/Binance/CoinGecko payloads) treated as fully trusted before insert | Tampering | Validate expected fields exist and are the expected type before writing to SQLite, matching the Phase 0 pattern already established for the `snapshots` table |
-
-## Sources
-
-### Primary (HIGH confidence)
-- Live tests in this research session against the project's actual `.venv`: `yfinance.Ticker('AAPL').history(period='5y', auto_adjust=True)`; `ccxt.binance()` market listing and `fetch_ohlcv` pagination for BTC/USDT and WIF/USDT; `ccxt.kraken()` market listing; `requests.get()` against `api.coingecko.com/api/v3/coins/{id}` and `/coins/categories/list`
-- docs.kraken.com/api/docs/rest-api/get-ohlc-data — official confirmation of the 720-candle hard cap, independent of `since`
-- ibkrguides.com/clientportal/aboutpapertradingaccounts.htm — official confirmation that paper accounts are automatic upon live-account approval
-- PyPI (`pip index versions`) — live-verified `ccxt` 4.5.68 and `pandas` 3.0.5 versions (26 July 2026)
-- `slopcheck` 0.6.1 (installed and run live in this session) — package legitimacy scan, all 7 packages `[OK]`
-
-### Secondary (MEDIUM confidence)
-- support.kraken.com/articles/360000919966-how-to-create-an-api-key — API key permission checkbox names and grouping, cross-checked against the general "trade-only key never needs Withdraw Funds" principle
-- docs.coingecko.com (multiple pages, via WebSearch synthesis) — free-tier `market_chart` 365-day depth limit, auto-granularity rules, Demo-plan ~100 calls/min figure
-- Multiple independent WebSearch sources on IBKR individual-account signup steps, documents required, and 2-3 business day approval timeframe
-- WebSearch synthesis on Independent Reserve KYC submission steps (~20 minutes)
-- WebSearch synthesis on Binance's New Zealand access status (no full ban found; only the separate Web3 Wallet feature is NZ-restricted)
-
-### Tertiary (LOW confidence)
-- Independent Reserve's actual approval turnaround time (beyond submission) — not found in this session; flagged as Open Question 2
-- The precise, current CoinGecko Demo-plan rate limit — WebSearch sources cite ~100 calls/min but this was not confirmed against a live authenticated dashboard check in this session; flagged as Open Question 3
-
-## Metadata
-
-**Confidence breakdown:**
-- Standard stack: HIGH — every library choice and version was live-installed and exercised against real external APIs in this session, not just checked against a registry
-- Architecture: HIGH — the cache-first pattern, tz-normalisation requirement, and pagination pattern were all directly observed, not inferred from documentation alone
-- Account setup: MEDIUM — IBKR's paper-account behaviour is HIGH confidence (official docs, directly fetched); Kraken's permission checkboxes are MEDIUM (support article plus general principle); Independent Reserve's approval timeline is LOW (unconfirmed)
-- Pitfalls: HIGH — all five pitfalls above were either directly reproduced (CoinGecko 429, yfinance tz, Kraken 720-candle cap, IBKR paper-account auto-grant) or are a direct logical consequence of a directly-reproduced finding (the venue-semantics pitfall)
-
-**Research date:** 26 July 2026
-**Valid until:** 7 days for CoinGecko rate-limit specifics and Binance NZ access status (both are policy-level and can change without notice); 30 days for the SQLite schema design, cache-first architecture pattern, and account-setup document requirements (stable, officially documented or directly tested against stable APIs).
+   - **RESOLUTION:** Non-blocking regardless of the answer. Phase 1's classification-call volume is trivially low — one `classify_crypto_instrument` call per new instrument, ever, via the `register_crypto_instrument` onboarding path (01-02-PLAN.md) — so this is low-risk under either cited figure. No pacing/backoff logic is required beyond always using the authenticated `x-cg-demo-api-key` header (Pitfall 3).
