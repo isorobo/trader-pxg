@@ -1,10 +1,11 @@
 ---
 phase: 5
 slug: paper-trading-loop
-status: draft
-nyquist_compliant: false
+status: planned
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-07-26
+updated: 2026-07-26
 ---
 
 # Phase 5 — Validation Strategy
@@ -21,7 +22,7 @@ created: 2026-07-26
 | **Config file** | pyproject.toml |
 | **Quick run command** | `python -m pytest tests/ -q -x --deselect tests/test_backtest_sanity.py` |
 | **Full suite command** | `python -m pytest tests/ -q` |
-| **Estimated runtime** | fast loop ~25s; full suite ~80s |
+| **Estimated runtime** | fast loop ~25s; full suite ~80s (Phase 5 adds ~9 test files) |
 
 ---
 
@@ -32,29 +33,50 @@ created: 2026-07-26
 - **Before `/gsd:verify-work`:** full suite green
 - **Max feedback latency:** 30 seconds (fast loop)
 
-**Live/manual exemptions:** IB Gateway install + login (human checkpoint), first live paper order round-trip (human-witnessed acceptance), Telegram token creation (human checkpoint), the two-week unattended window (wall-clock gate, like Phase 0's — auditable from the operations log + daily report).
+**Live/manual exemptions:** IB Gateway install + login (05-08, human checkpoint), first live paper order round-trip (05-09, human-witnessed acceptance), Telegram token creation (05-08, human checkpoint), Task Scheduler registration (05-09, human-run schtasks per D-07 precedent), the two-week unattended window (05-09, wall-clock gate, like Phase 0's — auditable from the operations log + daily report).
 
 ---
 
 ## Per-Task Verification Map
 
-*Populated by the planner.*
-
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| — | — | — | PAPER-01…07 | — | — | — | — | ❌ W0 | ⬜ pending |
+| 05-01/T1 | 05-01 | 1 | PAPER-05 | T-05-01, T-05-09 | Migration 0005 + frozen 5-config registry | integration (DB) | `python -m pytest tests/test_paper_ledger.py -x -q` | ❌ W0 | ⬜ pending |
+| 05-01/T2 | 05-01 | 1 | PAPER-03, PAPER-05 | T-05-01 | Deterministic order_ref; ledger round-trip incl. retire idempotency | unit | `python -m pytest tests/test_idempotency.py tests/test_paper_ledger.py -x -q` | ❌ W0 | ⬜ pending |
+| 05-02/T1 | 05-02 | 1 | PAPER-07 | — | NYSE trading-day gate | unit | `python -m pytest tests/test_calendar.py -x -q` | ❌ W0 | ⬜ pending |
+| 05-02/T2 | 05-02 | 1 | PAPER-06 | T-05-02, T-05-07 | Telegram fire-and-forget, no secret leakage, scheduled_auth distinct entry type | unit (mocked requests) | `python -m pytest tests/test_alerts.py -x -q` | ❌ W0 | ⬜ pending |
+| 05-03/T1 | 05-03 | 2 | PAPER-01, PAPER-02 | T-05-06 | Port 4002 only; whole-share rounding always floors | unit (mocked ib_async) | `python -m pytest tests/test_broker_ibkr.py -x -q` | ❌ W0 | ⬜ pending |
+| 05-03/T2 | 05-03 | 2 | PAPER-02 | T-05-10 | Crypto sim never places a real order | unit (mocked ccxt) | `python -m pytest tests/test_broker_crypto_sim.py -x -q` | ❌ W0 | ⬜ pending |
+| 05-04/T1 | 05-04 | 3 | PAPER-04 | T-05-04 | Conservative divergence classification; combined halt gate | unit | `python -m pytest tests/test_reconciliation.py -x -q` | ❌ W0 | ⬜ pending |
+| 05-04/T2 | 05-04 | 3 | PAPER-04 | T-05-08 | Only clear_halt.py can clear a halt | unit | `python -m pytest tests/test_reconciliation.py -x -q -k clear_halt` | ❌ W0 | ⬜ pending |
+| 05-05/T1 | 05-05 | 3 | PAPER-02 | T-05-05 | Self-computed MKT exits only; no resting stops; idempotent | unit (mocked broker/ccxt) | `python -m pytest tests/test_guardian.py -x -q` | ❌ W0 | ⬜ pending |
+| 05-05/T2 | 05-05 | 3 | PAPER-02 | T-05-09 | Rolling PF/drawdown/consecutive-loss auto-retire, frozen thresholds | unit | `python -m pytest tests/test_guardian.py -x -q -k kill_condition` | ❌ W0 | ⬜ pending |
+| 05-06/T1 | 05-06 | 4 | PAPER-01 | T-05-11 | Candidate scan/score/deterministic profile rotation; no retired config assigned | unit | `python -m pytest tests/test_entry_pipeline.py -x -q -k "scan_candidates or assign_exit_profile"` | ❌ W0 | ⬜ pending |
+| 05-06/T2 | 05-06 | 4 | PAPER-01 | T-05-03, T-05-05 | Gate->sizer->round->halt-gate->idempotency->submit, no bypass, crash-safe | integration (mocked ib_async) | `python -m pytest tests/test_entry_pipeline.py -x -q` | ❌ W0 | ⬜ pending |
+| 05-07/T1 | 05-07 | 5 | PAPER-07 | T-05-12 | Daily report paper-trading section; never breaks Phase 0's report | unit | `python -m pytest tests/test_paper_daily_report.py -x -q` | ❌ W0 | ⬜ pending |
+| 05-07/T2 | 05-07 | 5 | PAPER-07 | T-05-03 | Process-restart heal path (entry + guardian); full suite green | integration + full suite | `python -m pytest -q` | ❌ W0 | ⬜ pending |
+| 05-08/T1-T2 | 05-08 | 6 | PAPER-01, PAPER-06 | T-05-02, T-05-06 | Gateway install/login/API-enable; Telegram bot creation | manual | n/a — human checkpoint | n/a | ⬜ pending |
+| 05-08/T3 | 05-08 | 6 | PAPER-01, PAPER-06 | — | Automated connect/disconnect + real Telegram send smoke test | manual verify of automated check | Claude-run connectivity smoke (not pytest) | n/a | ⬜ pending |
+| 05-09/T1-T2 | 05-09 | 7 | PAPER-01, PAPER-03, PAPER-04, PAPER-07 | T-05-06 | Scheduler registration; witnessed live paper order + reconciliation | manual | n/a — human checkpoint | n/a | ⬜ pending |
+| 05-09/T3 | 05-09 | 7 | PAPER-07 | — | Monitoring-window documentation | manual | n/a — human checkpoint | n/a | ⬜ pending |
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] `tests/test_paper_pipeline.py` — scanner→gate→ranker→sizer→execution wiring with a mocked broker; Phase 4 stages provably in-line with no bypass (PAPER-01)
-- [ ] `tests/test_guardian.py` — exit-trigger evaluation per profile, whole-share rounding, kill-condition auto-retire (PAPER-02)
-- [ ] `tests/test_idempotency.py` — deterministic client order IDs; crash-resubmit can never double-order (PAPER-03)
-- [ ] `tests/test_reconciliation.py` — divergence classification rules (explainable vs unexplained), halt + manual_restart wiring on unexplained (PAPER-04)
-- [ ] `tests/test_paper_ledger.py` — real-format trade rows, migration 0005 (PAPER-05)
-- [ ] `tests/test_alerts.py` — Telegram fire-and-forget with local fallback, no token leakage in logs (PAPER-06)
-- [ ] `tests/test_recovery.py` — startup order pinned: read DB → fetch broker → reconcile BEFORE any new action (PAPER-07/crash safety)
+- [ ] `tests/conftest.py` — `paper_conn` fixture (05-01), `fake_ib` fixture (05-03)
+- [ ] `tests/test_idempotency.py` — covers PAPER-03 (05-01)
+- [ ] `tests/test_paper_ledger.py` — covers PAPER-05 (05-01)
+- [ ] `tests/test_calendar.py` — covers PAPER-07 trading-day gate (05-02)
+- [ ] `tests/test_alerts.py` — covers PAPER-06 (05-02)
+- [ ] `tests/test_broker_ibkr.py` — covers PAPER-01/02 broker adapter, whole-share rounding (05-03)
+- [ ] `tests/test_broker_crypto_sim.py` — covers PAPER-02 crypto sim leg (05-03)
+- [ ] `tests/test_reconciliation.py` — covers PAPER-04 (05-04)
+- [ ] `tests/test_guardian.py` — covers PAPER-02, D-01 kill-condition auto-retire (05-05)
+- [ ] `tests/test_entry_pipeline.py` — covers PAPER-01 (05-06)
+- [ ] `tests/test_paper_daily_report.py` — covers PAPER-07 daily report section (05-07)
+- [ ] `tests/test_recovery.py` — covers PAPER-07 crash-safety/idempotent restart (05-07)
+- [ ] Framework install: `pip install ib_async pandas-market-calendars` (05-02/05-03)
 
 ---
 
@@ -62,20 +84,21 @@ created: 2026-07-26
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
-| IB Gateway paper login (port 4002) | PAPER-01 | Human credentials + 2FA | Owner installs Gateway, logs into paper account DUR285675, enables API |
-| First paper order round-trip | PAPER-01/03 | Real broker interaction | One supervised entry order fills on paper; permId recorded; reconciliation matches |
-| Telegram alerts arrive | PAPER-06 | Human phone | Owner receives test message, fill alert, heartbeat |
-| Two-week unattended window | PAPER-07 / exit gate | Wall clock | Operations log + daily reports show zero unplanned interventions and zero unexplained divergences; weekly 2FA taps logged as pre-registered exceptions (D-13) |
+| IB Gateway paper login (port 4002) | PAPER-01 | Human credentials + 2FA | 05-08: Owner installs Gateway, logs into paper account DUR285675, enables API |
+| Telegram bot creation | PAPER-06 | Human's own Telegram account, BotFather conversation | 05-08: Owner creates bot, messages it once; Claude resolves chat_id and runs a real smoke send |
+| Task Scheduler registration | PAPER-01/02/04/07 | Structure guidance defers registration to the human's own command (D-07 precedent) | 05-09: Owner runs the three `schtasks /create /xml` commands Claude provides verbatim |
+| First paper order round-trip | PAPER-01/03/04 | Real broker interaction | 05-09: One supervised entry order fills on paper; permId recorded; reconciliation matches |
+| Two-week unattended window | PAPER-07 / exit gate | Wall clock | 05-09 opens it; verified later via `/gsd:verify-work`: operations log + daily reports show zero unplanned interventions and zero unexplained divergences; weekly 2FA taps logged as pre-registered `scheduled_auth` exceptions (D-13) |
 
 ---
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 30s (fast loop)
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies (checkpoint tasks in 05-08/05-09 use `<human-check>`/manual per the documented Live/manual exemptions)
+- [x] Sampling continuity: no 3 consecutive autonomous tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 30s (fast loop)
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** planned — pending execution
