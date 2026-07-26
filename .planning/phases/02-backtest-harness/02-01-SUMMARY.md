@@ -113,3 +113,7 @@ None - no external service configuration required.
 ---
 *Phase: 02-backtest-harness*
 *Completed: 2026-07-26*
+
+## Self-Check: PASSED
+
+All created files verified present on disk; all task/summary commit hashes (83f620e, f97ac24, 6d755ba, b3ed4d6) verified in git log.
