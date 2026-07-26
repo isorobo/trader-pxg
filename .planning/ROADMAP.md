@@ -49,7 +49,15 @@ Plans:
   1. Historical daily bars for any US stock and any major crypto pair come back with one function call
   2. IBKR paper account, Kraken API keys (trade-only), and Independent Reserve KYC are in progress or done
   3. The Python repo exists with git, config files, and `.env` for keys that is never committed
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Foundation: pin ccxt/pandas, migrations runner, instruments/bars schema, cache helpers (ACCT-05, ACCT-06)
+- [ ] 01-02-PLAN.md — CoinGecko asset classification (memecoin vs crypto_major heuristic)
+- [ ] 01-03-PLAN.md — Human checkpoint: IBKR, Kraken, Independent Reserve account applications (ACCT-01, ACCT-02, ACCT-03)
+- [ ] 01-04-PLAN.md — Stock daily bars fetcher (yfinance) with UTC-date normalization (ACCT-04)
+- [ ] 01-05-PLAN.md — Crypto daily bars fetcher (ccxt/Binance) with pagination (ACCT-04)
+- [ ] 01-06-PLAN.md — get_daily_bars public API + live exit-criterion acceptance run (ACCT-04, ACCT-07)
 
 ### Phase 2: Backtest Harness
 **Goal**: Test any strategy against history without lying to yourself.
@@ -152,7 +160,7 @@ Phases execute in numeric order; Phase 0 runs continuously in the background, Ph
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 0. Ground Truth | 5/5 | Monitoring (DATA-04 window to 2026-08-09) | - |
-| 1. Accounts & Data Plumbing | 0/TBD | Not started | - |
+| 1. Accounts & Data Plumbing | 0/6 | Planned | - |
 | 2. Backtest Harness | 0/TBD | Not started | - |
 | 3. Strategy Lab | 0/TBD | Not started | - |
 | 4. Risk Gate & Sizer | 0/TBD | Not started | - |
