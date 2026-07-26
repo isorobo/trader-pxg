@@ -37,6 +37,10 @@ Auto-selected defaults under the owner's full-auto directive. Override any befor
 - **D-11:** Telegram bot (token via .env, HUMAN checkpoint): fills, stops, breaker trips, reconciliation failures, and a twice-daily heartbeat. Alert failure never blocks trading logic (fire-and-forget with local log fallback).
 - **D-12:** Every run appends to a rotating operations log; the daily report gains a paper-trading section (positions, P&L, breaker state, coverage of scheduled runs) so the two-week unattended window is auditable from disk.
 
+### Research Resolutions (orchestrator-locked, pre-registered)
+- **D-13:** IBKR's mandatory weekly 2FA re-authentication (cannot be disabled on paper accounts) is a scheduled, logged PLATFORM CONSTRAINT, not a "manual intervention" under the exit criterion — which means no unplanned fixes to the system's own logic. The weekly tap is pre-registered here, logged each time it occurs, and the daily report distinguishes it from genuine interventions. (Owner may veto this reading.)
+- **D-14:** ib_async 2.1.0 is the broker library; idempotency keys ride permId/orderRef (the fields that survive reconnects); the guardian self-computes exit triggers and submits MKT orders (no resting native stop orders — single source of truth, no false reconciliation halts); sizer dollar outputs round DOWN to whole shares (IBKR API has no fractional US stock support); pandas-market-calendars 5.4.0 for NYSE hours; ccxt Binance public ticker for crypto sim fills; Kraken read-only checks are informational-only, never halting.
+
 ### Claude's Discretion
 - Module layout under `trader/paper/`, exact scheduler cadences within the decisions above, retry/backoff details, log formats.
 
