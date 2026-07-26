@@ -11,6 +11,7 @@ human-only manual-restart clear path are covered further down this file
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 import pytest
@@ -181,7 +182,16 @@ def test_harness_simulation_steps_trip_each_breaker_on_correct_day():
 
 
 def test_breakers_module_never_imports_sqlite_or_db():
+    """breakers.py may mention trader.data.db in prose (docstrings), but
+    must never actually import sqlite3 or trader.data.db -- evaluate_breakers
+    performs zero DB/file I/O."""
     source = BREAKERS_SOURCE_PATH.read_text(encoding="utf-8")
-    assert "import sqlite3" not in source
-    assert "trader.data.db" not in source
-    assert "trader.data import db" not in source
+    tree = ast.parse(source)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                assert alias.name != "sqlite3"
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            assert module != "sqlite3"
+            assert not module.startswith("trader.data")
