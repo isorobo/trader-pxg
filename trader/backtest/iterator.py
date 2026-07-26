@@ -126,3 +126,15 @@ class PointInTimeIterator:
         docstring for why fill logic needs this.
         """
         return self._cursors[symbol].bar_on(pd.Timestamp(date))
+
+    @property
+    def symbols(self) -> list[str]:
+        """The universe's symbol names, in construction order.
+
+        Added for plan 02-07's shared pick_entries(iterator, date,
+        open_positions, rng) strategy contract: strategies need to discover
+        the tradable universe from the iterator itself so runner.py (plan
+        02-08) can call any strategy uniformly without an extra
+        universe argument.
+        """
+        return list(self._cursors.keys())
