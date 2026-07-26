@@ -57,7 +57,7 @@ Plans:
 - [ ] 01-03-PLAN.md — Human checkpoint: IBKR, Kraken, Independent Reserve account applications (ACCT-01, ACCT-02, ACCT-03)
 - [x] 01-04-PLAN.md — Stock daily bars fetcher (yfinance) with UTC-date normalization (ACCT-04)
 - [x] 01-05-PLAN.md — Crypto daily bars fetcher (ccxt/Binance) with pagination (ACCT-04)
-- [ ] 01-06-PLAN.md — get_daily_bars public API + live exit-criterion acceptance run (ACCT-04, ACCT-07)
+- [x] 01-06-PLAN.md — get_daily_bars public API + live exit-criterion acceptance run (ACCT-04, ACCT-07)
 
 ### Phase 2: Backtest Harness
 **Goal**: Test any strategy against history without lying to yourself.
