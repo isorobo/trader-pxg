@@ -66,7 +66,19 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. The random-strategy sanity test loses money at roughly the fee rate
   2. One real strategy runs end-to-end and produces a metrics report
-**Plans**: TBD
+**Plans**: 10 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Fee/slippage/EXIT_PROFILES config + backtest_runs/backtest_trades migration (BACK-02, BACK-03, BACK-04)
+- [ ] 02-02-PLAN.md — Point-in-time bar iterator, two-pointer cursors (BACK-01)
+- [ ] 02-03-PLAN.md — Metrics module with hand-computed golden fixture (BACK-06)
+- [ ] 02-04-PLAN.md — Fee and slippage fill mechanics (BACK-02, BACK-03)
+- [ ] 02-05-PLAN.md — Exit engine: D-10 order, entry-bar check, stop-wins-tie, trailing, eod_flat (BACK-04)
+- [ ] 02-06-PLAN.md — Trade ledger: one row per fill, reproducibility (BACK-05)
+- [ ] 02-07-PLAN.md — Seeded random strategy + momentum placeholder strategy (BACK-07)
+- [ ] 02-08-PLAN.md — Runner: wires iterator+fills+exits+ledger, signal-to-fill lag (BACK-01, BACK-04, BACK-05)
+- [ ] 02-09-PLAN.md — Sanity universe backfill + permanent BACK-07 exit-gate test
+- [ ] 02-10-PLAN.md — End-to-end momentum placeholder run + metrics report (BACK-06)
 
 ### Phase 3: Strategy Lab
 **Goal**: Find configs worth paper trading; kill the rest cheaply.
@@ -161,7 +173,7 @@ Phases execute in numeric order; Phase 0 runs continuously in the background, Ph
 |-------|----------------|--------|-----------|
 | 0. Ground Truth | 5/5 | Monitoring (DATA-04 window to 2026-08-09) | - |
 | 1. Accounts & Data Plumbing | 0/6 | Planned | - |
-| 2. Backtest Harness | 0/TBD | Not started | - |
+| 2. Backtest Harness | 0/10 | Planned | - |
 | 3. Strategy Lab | 0/TBD | Not started | - |
 | 4. Risk Gate & Sizer | 0/TBD | Not started | - |
 | 5. Paper Trading Loop | 0/TBD | Not started | - |
