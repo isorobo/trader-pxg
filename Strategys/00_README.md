@@ -1,25 +1,49 @@
 # AI TRADRR — Strategy Library
 
-Curated strategy reference for the AI TRADRR project. Each file uses the same structure so strategies can be parsed/implemented consistently: **Core Idea → Rules (Entry/Exit/Stop) → Best Conditions → Avoid → Stats → Notes for Automation**.
+Curated strategy reference for the AI TRADRR project. Files 01–13 are full single-strategy specs; files 14–20 are category libraries (condensed multi-strategy references) built from the 100-strategy guide, deduplicated and edited.
 
-## What was edited from the original list
+## Structure
 
-**Cut / merged:**
-- **Support & Resistance** and **Supply & Demand** were ~80% the same concept with different branding. Merged into one file: `05_key_levels.md`.
-- Removed the vague filler and fixed the broken formatting in Mean Reversion and Breakout.
-- Win rates and R:R kept, but treat them as *rough priors*, not promises — real numbers come from your own backtests.
+**Core strategies (full specs):**
+- `01_trend_following.md`
+- `02_mean_reversion.md`
+- `03_breakout_trading.md`
+- `04_pullback_trading.md`
+- `05_key_levels.md` (Support/Resistance + Supply/Demand, merged)
+- `06_vwap_trading.md`
+- `07_momentum_trading.md`
+- `08_opening_range_breakout.md`
+- `09_statistical_pairs_trading.md`
+- `10_donchian_breakout.md` ⭐
+- `11_rsi2_mean_reversion.md` ⭐
+- `12_time_series_momentum.md` ⭐
+- `13_risk_management_overlay.md` ⭐ **read first**
 
-**Kept (cleaned up):** Trend Following, Mean Reversion, Breakout, Pullback, Key Levels, VWAP, Momentum, Opening Range Breakout, Statistical Pairs.
+**Category libraries (from the 100-strategy guide):**
+- `14_candlestick_chart_patterns.md` — engulfing, pinbar, H&S, triangles, flags, cup & handle, SMC setups (with caveats)
+- `15_moving_average_trend.md` — crossovers, GMMA, Supertrend, Ichimoku, KAMA, multi-timeframe alignment
+- `16_oscillator_momentum.md` — RSI/MACD divergence, stochastics, threshold systems (redundant clones compressed)
+- `17_mean_reversion_range.md` — Bollinger/Keltner fades, Z-score, pivots, Camarilla, Initial Balance, Value Area, fibs
+- `18_volatility_event_breakout.md` — squeezes, gaps, earnings, news straddles, false-breakout traps
+- `19_options_strategies.md` — covered calls, spreads, condors, straddles (reference-only for v1)
+- `20_quant_arbitrage_structure.md` — grid, seasonality, carry, funding arb; honest labels on what's closed to retail
 
-**Added (good fits for an automated system):**
-- `10_donchian_breakout.md` — Turtle-style channel breakout. Fully mechanical, famously backtestable.
-- `11_rsi2_mean_reversion.md` — Connors-style short-term mean reversion. Simple, well-studied.
-- `12_time_series_momentum.md` — 12-month momentum. Strong academic evidence, low maintenance.
-- `13_risk_management_overlay.md` — Not a strategy, but the thing that decides whether any strategy survives. Read first.
+## Deduplication log (100-strategy guide → this library)
+- #27 Donchian/Turtle → already `10_donchian_breakout.md`
+- #35 VWAP trend hold → already `06_vwap_trading.md`
+- #61 Horizontal range rotation → already `05_key_levels.md`
+- #68 Opening Range Breakout → already `08_opening_range_breakout.md`
+- #91 Stat-arb pairs/cointegration → already `09_statistical_pairs_trading.md`
+- RVI + Ultimate Oscillator → cut as redundant clones of other oscillator systems
+- Williams %R / StochRSI / CMO → kept but flagged as interchangeable with Stochastic (implement one)
+- False-breakout trap and SMC "liquidity sweep" → cross-referenced as the same phenomenon in two vocabularies
 
-**A note on the SMC / advanced doc:** Smart Money Concepts is popular on YouTube but is largely a rebranding of classic concepts (S/R zones, breakouts) with unfalsifiable storytelling about "institutions." Hard to code objectively, so it's not in this library. Market Profile, order flow, market making, and vol arb need data/infrastructure a retail AI bot won't have — skipped for now. Statistical arbitrage lives on in simplified form as Pairs Trading (`09`).
+## Editorial stance
+- SMC setups are included (file 14) but flagged: real behaviors, unfalsifiable narrative, mostly hard to code objectively. FVGs are the codeable exception.
+- Options (file 19) and HFT arbitrage (file 20) are labeled reference-only — wrong infrastructure tier for a v1 retail bot.
+- Every published win rate in this library is an optimistic prior. Your backtests are the only numbers that count.
 
-## Comparison Table
+## Comparison Table (core strategies)
 
 | # | Strategy | Best Market | Best Condition | Win Rate* | R:R* | Automation Difficulty |
 |---|----------|-------------|----------------|-----------|------|----------------------|
@@ -36,7 +60,13 @@ Curated strategy reference for the AI TRADRR project. Each file uses the same st
 | 11 | RSI-2 Reversion | Stock indexes | Long-term uptrend | 65–80% | 1:0.8–1:1.5 | Very Easy |
 | 12 | Time-Series Momentum | ETFs, Futures | Multi-month trends | 45–60% | varies | Very Easy |
 
-\* Approximate historical tendencies. Verify with your own backtests — costs, slippage, and regime changes eat theoretical edges.
+\* Approximate historical tendencies — verify with your own backtests; costs, slippage, and regime changes eat theoretical edges.
+
+## Regime routing map (ties everything together — full version in file 13)
+- **Trending (ADX > 25):** 01, 04, 10, 12, file 15 systems
+- **Ranging (ADX < 20):** 02, 05, 11, file 17 systems
+- **Compression/catalyst days:** 03, 07, 08, file 18 systems
+- **Always-on overlays:** 12, seasonality (file 20), risk rules (file 13)
 
 ## Disclaimer
-This is educational reference material for a software project, not financial advice. Backtest everything, paper trade before live, and assume published win rates are optimistic.
+Educational reference material for a software project — not financial advice. Backtest everything, paper trade before live money, and assume published stats are optimistic.
