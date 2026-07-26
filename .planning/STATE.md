@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 25 July 2026)
 ## Current Position
 
 Phase: 0 of 0–10 (Ground Truth)
-Plan: Phase 3 build complete (6/6, 217 tests); outcome: NOTHING SURVIVED (15/15 insufficient_sample) — honest result per phase doc
-Status: AWAITING OWNER — Phase 3 iteration decision (recommended v2: longer OOS windows + entry-strictness in sweep grid). Phase cannot advance to Phase 4. Phase 0 monitoring to 2026-08-09; Phase 1 human_needed (accounts)
-Last activity: 2026-07-26 — Phase 3 verified human_needed: 8/8 build must-haves, anti-tamper chronology clean
+Plan: Phase 3 v2 executing (owner approved, pre-registered D-13…D-16); Phase 4 planned (5 plans), building in parallel per owner's full-auto directive
+Status: OWNER DECISIONS 2026-07-26: v2 "run as recommended"; "continue planning and executing all phases you can without my input". Phase 5 gated on v2 survivors + account items. Phase 0 monitoring to 2026-08-09
+Last activity: 2026-07-26 — v2 plans checked (0 blockers); 03-07 executing; Phase 4 planned, checker next
 
 Progress: [███░░░░░░░] 34%
 

@@ -108,7 +108,14 @@ Plans:
   1. A poisoned candidate list (illiquid, brand-new token, correlated pair) has the right entries deleted
   2. Circuit breakers fire correctly in simulation
   3. Unit tests pass on the gate, sizer, and breakers
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 04-01-PLAN.md — Frozen risk config (liquidity/spread/correlation/sizer/breaker constants) + breaker_events migration (RISK-01, RISK-02, RISK-03)
+- [ ] 04-02-PLAN.md — Risk gate: liquidity/listing-age/spread checks + correlation cluster elimination + reason codes (RISK-01)
+- [ ] 04-03-PLAN.md — Position sizer: deterministic cap order, golden fixture, hypothesis cap-invariant property tests (RISK-02)
+- [ ] 04-04-PLAN.md — Circuit breakers: incremental no-lookahead evaluation + append-only persistence + human-only manual-restart CLI (RISK-03)
+- [ ] 04-05-PLAN.md — Poisoned-list acceptance test: gate + sizer two-stage pipeline, D-07 exit gate (RISK-04, RISK-01, RISK-02)
 
 ### Phase 5: Paper Trading Loop
 **Goal**: The full pipeline running live on fake money — stocks via IBKR paper, crypto via simulated ledger.
@@ -185,7 +192,7 @@ Phases execute in numeric order; Phase 0 runs continuously in the background, Ph
 | 1. Accounts & Data Plumbing | 0/6 | Planned | - |
 | 2. Backtest Harness | 10/10 | Complete | 2026-07-26 |
 | 3. Strategy Lab | 6/8 | v1 complete (0 survivors, honest result) — v2 iteration planned | - |
-| 4. Risk Gate & Sizer | 0/TBD | Not started | - |
+| 4. Risk Gate & Sizer | 0/5 | Planned (blocked on Phase 3 owner decision before execution) | - |
 | 5. Paper Trading Loop | 0/TBD | Not started | - |
 | 6. Graduation Review | 0/TBD | Not started | - |
 | 7. Attribution & Tournament | 0/TBD | Not started | - |
