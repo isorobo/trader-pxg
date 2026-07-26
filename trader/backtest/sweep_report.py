@@ -95,17 +95,30 @@ def write_sweep_summary(
     (keys `run_id`, `params`, `metrics`, `strategy_id`, `bucket`,
     `regime`) -- looked up by `run_id`, never re-derived, so the tune
     metrics table always reflects the real tune-sweep artifact.
+
+    The filename carries the tune `run_id` as its final disambiguator
+    (`{date}-{strategy}-{bucket}-{regime}-run{run_id}-sweep.md`) --
+    03-RESEARCH.md's Recommended Project Structure names the pattern
+    without a run_id, but D-10 pre-registers up to 5 top-5 configs per
+    (strategy, bucket, regime) combination, and every one of them gets its
+    own OOS validation and its own report (Task 2's "one per oos_result
+    entry" acceptance criterion). Omitting run_id would collide same-combo
+    candidates' filenames and silently drop reports -- a data-loss bug,
+    not a formatting choice.
     """
     candidate = oos_result["candidate"]
     strategy = candidate["strategy_id"]
     bucket = candidate["bucket"]
     regime = candidate["regime"]
     verdict = oos_result["verdict"]
+    run_id = tune_candidate["run_id"]
 
     base_path = Path(base_dir)
     base_path.mkdir(parents=True, exist_ok=True)
     today_str = datetime.now().strftime("%Y-%m-%d")
-    report_path = base_path / f"{today_str}-{strategy}-{bucket}-{regime}-sweep.md"
+    report_path = base_path / (
+        f"{today_str}-{strategy}-{bucket}-{regime}-run{run_id}-sweep.md"
+    )
 
     trades = ledger.get_trades_for_run(conn, oos_result["oos_run_id"])
 

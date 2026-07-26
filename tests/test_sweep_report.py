@@ -152,7 +152,7 @@ def test_write_sweep_summary_writes_expected_filename(tmp_path, data_conn):
     )
 
     assert report_path.exists()
-    assert report_path.name.endswith("-momentum_stock-stock-trending-sweep.md")
+    assert report_path.name.endswith(f"-momentum_stock-stock-trending-run{run_id}-sweep.md")
 
 
 def test_write_sweep_summary_includes_tune_and_oos_tables_and_verdict(tmp_path, data_conn):
