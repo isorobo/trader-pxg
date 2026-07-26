@@ -26,12 +26,15 @@ to connect anywhere but the paper port.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import random
-from datetime import date, timedelta
+import sys
+from datetime import date, datetime, timedelta, timezone
 
 import pandas as pd
 
+from trader.backtest.config import SLIPPAGE_PCT
 from trader.backtest.iterator import PointInTimeIterator
 from trader.backtest.strategies.momentum_v2 import (
     MOMENTUM_VARIANTS,
@@ -40,11 +43,15 @@ from trader.backtest.strategies.momentum_v2 import (
 )
 from trader.backtest.universe import STOCK_UNIVERSE
 from trader.data.api import get_daily_bars
-from trader.paper import config, ledger
-from trader.risk import sizer
+from trader.paper import alerts, calendar_, config, idempotency, ledger, ops_log, reconcile
+from trader.paper import broker_ibkr
+from trader.risk import gate, sizer
 
-_ASSET_CLASS_STOCK = "stock"
+_ENTRY_SIDE = "buy"
+_ENTRY_INTENT = "entry"
+_ENTRY_VENUE = "ibkr_paper"
 _ROUTING_VENUE = "smart"  # IBKR's SMART routing venue string, not a DB venue value.
+_ASSET_CLASS_STOCK = "stock"
 
 
 # ---------------------------------------------------------------------------
@@ -66,6 +73,30 @@ def _history_to_bar_dicts(history) -> list[dict]:
             "volume": float(row[4]),
         }
         for row in history
+    ]
+
+
+def _bars_as_dicts(conn, symbol: str, as_of_date: date) -> list[dict]:
+    """Fetch ``symbol``'s bars up to (not including) ``as_of_date`` and
+    shape them into the ``list[dict]`` (``ts``/``open``/``high``/``low``/
+    ``close``/``volume``) contract ``trader.risk.gate.apply_risk_gate``
+    requires for its correlation/liquidity checks -- unlike
+    ``_history_to_bar_dicts``, this includes ``ts`` (needed for the gate's
+    date-indexed correlation window)."""
+    yesterday = as_of_date - timedelta(days=1)
+    df = get_daily_bars(symbol, end=str(yesterday), asset_class=_ASSET_CLASS_STOCK, conn=conn)
+    cutoff = pd.Timestamp(yesterday, tz="UTC")
+    df = df[df.index <= cutoff]
+    return [
+        {
+            "ts": ts.date().isoformat(),
+            "open": float(row["open"]),
+            "high": float(row["high"]),
+            "low": float(row["low"]),
+            "close": float(row["close"]),
+            "volume": float(row["volume"]),
+        }
+        for ts, row in df.iterrows()
     ]
 
 
@@ -159,3 +190,320 @@ def _live_profile_names(conn) -> list[str]:
             "all five live strategy configs are retired -- nothing left to trade"
         )
     return names
+
+
+# ---------------------------------------------------------------------------
+# Task 2: STEP0 heal -> gate -> sizer -> round -> per-candidate heal ->
+# halt-gate -> persist-then-submit -> ledger -> alert
+# ---------------------------------------------------------------------------
+
+
+def _has_open_position_for_order_ref(conn, order_ref: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM paper_positions WHERE entry_order_ref = ? AND status = 'open'",
+        (order_ref,),
+    ).fetchone()
+    return row is not None
+
+
+def _run_step0_heal_pass(conn, ibkr_adapter, broker_fills: list[dict]) -> list[str]:
+    """STEP 0 (NEW, RESIDUAL BLOCKER 1): an UNSCOPED pass over EVERY
+    unresolved local order, run once per invocation, before candidate
+    scanning, before the trading-day check, and before the halt gate --
+    the fix for "the heal only ran inside the fresh-candidate loop, so
+    orphans whose signal does not re-fire were never checked."
+
+    Only entry orders are healed here -- an orphaned EXIT order is the
+    guardian's own concern (guardian.py's identical persist-before-submit +
+    get_unresolved_orders sequence, Plan 05-05); this pipeline never calls
+    close_position and must not try to.
+    """
+    healed_this_run: list[str] = []
+    for local_order in ledger.get_all_unresolved_orders(conn):
+        if local_order["intent"] != _ENTRY_INTENT:
+            continue
+
+        match = idempotency.find_unresolved_match([local_order], broker_fills)
+        if match is None:
+            # Still genuinely in flight, or the broker truly has no record
+            # of it yet -- leave it for a later run.
+            continue
+
+        strategy_id = local_order["strategy_id"]
+        symbol = local_order["symbol"]
+        cfg = config.LIVE_STRATEGY_CONFIGS_BY_PROFILE_NAME.get(strategy_id)
+        if cfg is None:
+            # A retired/unknown strategy_id -- do not open a position under
+            # a config this process no longer recognizes.
+            ops_log.append_ops_log(
+                "error",
+                f"STEP0: order {local_order['order_ref']} references unknown/retired "
+                f"strategy_id {strategy_id!r} -- skipped, not opened as a position",
+            )
+            continue
+
+        broker_fill = match["broker_fill"]
+        if local_order["status"] != "filled":
+            ledger.heal_order(
+                conn,
+                local_order["order_ref"],
+                broker_fill.get("permId"),
+                broker_fill.get("fill_price"),
+                datetime.now(timezone.utc).isoformat(),
+            )
+
+        if not _has_open_position_for_order_ref(conn, local_order["order_ref"]):
+            # STEP 0 has no "current candidate price" context the way the
+            # per-candidate loop does -- fall back to the broker's own fill
+            # price, or a live quote if the fill carried none.
+            healing_price = broker_fill.get("fill_price")
+            if healing_price is None:
+                healing_price = ibkr_adapter.latest_price(symbol)
+            ledger.open_position(
+                conn,
+                strategy_id,
+                symbol,
+                _ENTRY_VENUE,
+                _ASSET_CLASS_STOCK,
+                local_order["qty"],
+                healing_price,
+                datetime.now(timezone.utc).isoformat(),
+                local_order["order_ref"],
+                cfg.exit_profile,
+            )
+
+        alerts.notify(
+            "fill",
+            f"{symbol} healed via STEP 0 from a crash-orphaned fill under {strategy_id}",
+        )
+        healed_this_run.append(local_order["order_ref"])
+
+    return healed_this_run
+
+
+def run_entry_pipeline_once(conn, ibkr_adapter, as_of_date: date | None = None) -> dict:
+    """The ``--once`` CLI body (D-05, no daemon mode).
+
+    Fetches ``ibkr_adapter.snapshot()["fills"]`` exactly once, at the very
+    top, before anything else -- reused by both STEP 0 and the
+    per-candidate heal check (STEP 1) below.
+    """
+    as_of_date = as_of_date or date.today()
+    broker_fills = ibkr_adapter.snapshot()["fills"]
+
+    # STEP 0 -- unconditional, unscoped heal pass. Runs BEFORE the
+    # trading-day check and BEFORE the halt gate: crash recovery must not
+    # wait for the next trading day, and healing is never gated by a halt
+    # (BLOCKER 1 / RESIDUAL BLOCKER 1).
+    healed_this_run = _run_step0_heal_pass(conn, ibkr_adapter, broker_fills)
+
+    if not calendar_.is_trading_day(as_of_date):
+        ops_log.append_ops_log(
+            "scheduled_run",
+            f"entry pipeline {as_of_date}: not a trading day, "
+            f"{len(healed_this_run)} healed via STEP 0",
+        )
+        return {"skipped": "not_a_trading_day", "healed": healed_this_run}
+
+    candidates = scan_candidates(conn, as_of_date)
+    if not candidates:
+        ops_log.append_ops_log(
+            "scheduled_run",
+            f"entry pipeline {as_of_date}: 0 candidates, "
+            f"{len(healed_this_run)} healed via STEP 0",
+        )
+        return {"candidates": 0, "healed": healed_this_run}
+
+    market_data = {
+        (c["symbol"], c["venue"]): {
+            "bars": _bars_as_dicts(conn, c["symbol"], as_of_date),
+            "asset_class": _ASSET_CLASS_STOCK,
+            # Reuses the stock slippage constant as its spread proxy,
+            # exactly as trader/risk/config.py's own MAX_SPREAD_PCT already
+            # does -- never a new literal here.
+            "spread_pct": SLIPPAGE_PCT[_ASSET_CLASS_STOCK],
+        }
+        for c in candidates
+    }
+    accepted, rejected = gate.apply_risk_gate(candidates, market_data)
+
+    # Raises RuntimeError if every live config has been retired -- always
+    # called once real candidates exist this run (T-05-11).
+    live_profile_names = _live_profile_names(conn)
+
+    open_positions_for_sizer = [
+        {
+            "symbol": p["symbol"],
+            "venue": p["venue"],
+            "asset_class": p["asset_class"],
+            "weight": (p["qty"] * p["entry_price"]) / config.PAPER_ACCOUNT_EQUITY,
+        }
+        for p in ledger.get_open_positions(conn)
+    ]
+    sized = sizer.size_positions(accepted, config.PAPER_ACCOUNT_EQUITY, open_positions_for_sizer)
+
+    submitted: list[str] = []
+
+    # REVISED per-position sequence -- this exact order is load-bearing
+    # and must not be reshuffled (D-08 no-bypass-path, BLOCKER 1).
+    for position in sized["positions"]:
+        dollar_amount = position["weight"] * config.PAPER_ACCOUNT_EQUITY
+        price = market_data[(position["symbol"], position["venue"])]["bars"][-1]["close"]
+        qty = broker_ibkr.round_shares_down(dollar_amount, price)
+        if qty <= 0:
+            continue
+
+        profile_name = assign_exit_profile(position["symbol"], live_profile_names)
+        cfg = config.LIVE_STRATEGY_CONFIGS_BY_PROFILE_NAME[profile_name]
+
+        # STEP 1 (per-candidate heal check, defensive second layer): ANY
+        # date, not just today -- nearly always a no-op for anything STEP 0
+        # already healed (STEP 0 already flipped that order's status to
+        # 'filled', and this SCOPED query only returns
+        # 'pending_submit'/'submitted' rows).
+        unresolved = ledger.get_unresolved_orders(
+            conn, profile_name, position["symbol"], _ENTRY_SIDE
+        )
+        match = idempotency.find_unresolved_match(unresolved, broker_fills)
+        if match is not None:
+            local_order = match["local_order"]
+            broker_fill = match["broker_fill"]
+            fill_price = broker_fill.get("fill_price", price)
+            if local_order["status"] != "filled":
+                ledger.heal_order(
+                    conn,
+                    local_order["order_ref"],
+                    broker_fill.get("permId"),
+                    fill_price,
+                    datetime.now(timezone.utc).isoformat(),
+                )
+            if not _has_open_position_for_order_ref(conn, local_order["order_ref"]):
+                ledger.open_position(
+                    conn,
+                    profile_name,
+                    position["symbol"],
+                    _ENTRY_VENUE,
+                    _ASSET_CLASS_STOCK,
+                    local_order["qty"],
+                    price,
+                    datetime.now(timezone.utc).isoformat(),
+                    local_order["order_ref"],
+                    cfg.exit_profile,
+                )
+            alerts.notify(
+                "fill",
+                f"{position['symbol']} healed from a crash-orphaned fill under {profile_name}",
+            )
+            # Heal always proceeds, halted or not -- move to the next
+            # position rather than falling through to the halt gate below.
+            continue
+
+        # STEP 2 (still-in-flight check): an order for this (strategy_id,
+        # symbol, side) is already pending/submitted with no confirmed
+        # broker fill yet -- skip creating ANOTHER order this run.
+        if unresolved:
+            continue
+
+        # STEP 3 (halt gate -- ONLY reached when unresolved is empty, i.e.
+        # no local trace of any order for this tuple exists yet). No NEW
+        # submission while halted (D-07) -- but STEP 0 and STEP 1 above
+        # already ran unconditionally before this check.
+        if reconcile.is_entry_halted(conn):
+            continue
+
+        # STEP 4 (persist BEFORE submit, BLOCKER 1): written to the local
+        # DB before the broker call, so ANY crash from this point forward
+        # leaves a local trace a later run's get_unresolved_orders /
+        # get_all_unresolved_orders will find.
+        order_ref = idempotency.build_order_ref(
+            profile_name, position["symbol"], as_of_date.isoformat(), _ENTRY_SIDE, _ENTRY_INTENT
+        )
+        ledger.record_order(
+            conn,
+            order_ref,
+            profile_name,
+            position["symbol"],
+            _ENTRY_VENUE,
+            _ENTRY_SIDE,
+            _ENTRY_INTENT,
+            qty,
+            status="pending_submit",
+        )
+
+        # STEP 5 (the broker call + finalize).
+        result = ibkr_adapter.place_order(position["symbol"], "BUY", qty, order_ref)
+        ledger.update_order_status(
+            conn, order_ref, status="submitted", perm_id=result["perm_id"]
+        )
+        ledger.open_position(
+            conn,
+            profile_name,
+            position["symbol"],
+            _ENTRY_VENUE,
+            _ASSET_CLASS_STOCK,
+            qty,
+            price,
+            datetime.now(timezone.utc).isoformat(),
+            order_ref,
+            cfg.exit_profile,
+        )
+        alerts.notify(
+            "fill", f"{position['symbol']} entered {qty} shares under {profile_name}"
+        )
+        submitted.append(order_ref)
+
+    halted_now = reconcile.is_entry_halted(conn)
+    ops_log.append_ops_log(
+        "scheduled_run",
+        f"entry pipeline {as_of_date}: {len(candidates)} candidates, "
+        f"{len(accepted)} accepted, {len(submitted)} submitted, "
+        f"{len(healed_this_run)} healed via STEP 0, halted={halted_now}",
+    )
+    return {
+        "candidates": len(candidates),
+        "accepted": len(accepted),
+        "submitted": submitted,
+        "healed": healed_this_run,
+        "halted": halted_now,
+    }
+
+
+def main(argv: list[str] | None = None) -> None:
+    """``python -m trader.paper.entry_pipeline --once`` (D-05: no daemon
+    mode)."""
+    from trader.data import db
+    from trader.paper.broker_ibkr import IBKRBrokerAdapter
+
+    parser = argparse.ArgumentParser(
+        prog="python -m trader.paper.entry_pipeline",
+        description="Run the paper-trading entry pipeline once (D-05/PAPER-01).",
+    )
+    parser.add_argument(
+        "--once",
+        action="store_true",
+        required=True,
+        help="Run a single entry pass and exit. Required: no daemon mode.",
+    )
+    parser.add_argument(
+        "--db-path",
+        default="data/trader.db",
+        help="Path to the SQLite DB (default: data/trader.db).",
+    )
+    args = parser.parse_args(argv)
+
+    if not args.once:
+        print("Usage error: --once is required.", file=sys.stderr)
+        sys.exit(2)
+
+    conn = db.get_connection(args.db_path)
+    try:
+        ibkr_adapter = IBKRBrokerAdapter()
+        ibkr_adapter.connect()
+        summary = run_entry_pipeline_once(conn, ibkr_adapter)
+        print(summary)
+    finally:
+        conn.close()
+
+
+if __name__ == "__main__":
+    main()

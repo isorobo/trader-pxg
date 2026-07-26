@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>Runs Trader AI's Phase 5 paper-trading entry pipeline (STEP0 crash-recovery heal, scan, gate, sizer, submit) once daily, shortly after NYSE open (D-05: no daemon mode). StartBoundary below (01:45 NZ local time) is the NZ-local-time equivalent of ~09:45 US Eastern computed for NZST (UTC+12) vs EDT (UTC-4), a 16-hour offset -- DST shifts this by an hour twice a year in each hemisphere (NZ's DST calendar and the US's DST calendar do not flip on the same dates), so the true NZ-local equivalent drifts across the year. This trigger is only the wake-up call: the code's own trader.paper.calendar_.is_trading_day/session_window check (inside run_entry_pipeline_once) is the real gate on whether today is an NYSE trading day, never this XML's StartBoundary alone. Registration deferred to the 05-09 human checkpoint.</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <TimeTrigger>
+      <StartBoundary>2026-07-27T01:45:00</StartBoundary>
+      <Enabled>true</Enabled>
+      <Repetition>
+        <Interval>P1D</Interval>
+        <Duration>P9999D</Duration>
+        <StopAtDurationEnd>false</StopAtDurationEnd>
+      </Repetition>
+    </TimeTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>false</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <WakeToRun>false</WakeToRun>
+    <ExecutionTimeLimit>PT10M</ExecutionTimeLimit>
+    <Priority>7</Priority>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>C:\Users\Owner\Desktop\Claude Project\AI TRADRR\scripts\paper_entry.bat</Command>
+      <WorkingDirectory>C:\Users\Owner\Desktop\Claude Project\AI TRADRR</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>
