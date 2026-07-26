@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 25 July 2026)
 ## Current Position
 
 Phase: 0 of 0–10 (Ground Truth)
-Plan: Phase 3 v2 executing (owner approved, pre-registered D-13…D-16); Phase 4 planned (5 plans), building in parallel per owner's full-auto directive
-Status: OWNER DECISIONS 2026-07-26: v2 "run as recommended"; "continue planning and executing all phases you can without my input". Phase 5 gated on v2 survivors + account items. Phase 0 monitoring to 2026-08-09
-Last activity: 2026-07-26 — v2 plans checked (0 blockers); 03-07 executing; Phase 4 planned, checker next
+Plan: Phases 3 AND 4 CLOSED (verified passed 10/10 and 17/17). FIVE OOS SURVIVORS (momentum/stock/choppy/loose, PF 2.3-20.4). Phase 5 discussion next
+Status: Phases 2, 3, 4 closed. Phase 5 (paper loop) opening — execution will checkpoint on user items: Kraken trade-only keys → .env, IBKR Gateway login, Telegram bot token. Phase 0 monitoring to 2026-08-09; Phase 1 accounts UAT open
+Last activity: 2026-07-26 — v2: 10,800 runs, 5 survivors, kill conditions registered; Phase 4 safety layer verified
 
-Progress: [███░░░░░░░] 34%
+Progress: [█████░░░░░] 47%
 
 ## Performance Metrics
 

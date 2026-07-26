@@ -1,155 +1,158 @@
 ---
 phase: 03-strategy-lab
-verified: 2026-07-26T21:30:00Z
-status: human_needed
-score: 8/8 must-haves verified (build); 0/1 outcome criteria met (owner iteration decision required)
-human_verification:
-  - test: "Owner reviews the honest 'nothing survived' result and decides how Phase 3 iterates (wider OOS windows, longer-history universe, revisit the 15-trade OOS floor vs 4-6 month OOS windows, or additional strategies/regimes) before the sweep is re-run"
-    expected: "Owner either accepts the cheap-kill result and directs a specific Phase 3 revision, or explicitly overrides to advance despite zero OOS survivors (would contradict ROADMAP.md's own success criterion 1 and standing rule 5, 'it'll probably be fine = it goes back a phase')"
-    why_human: "This is the phase's own explicitly human decision point (03-CONTEXT.md, 03-VALIDATION.md Manual-Only Verifications: '\"Nothing survived\" branch ... Human decision to loop back to Phase 3 rather than advance'). No code check can substitute for the owner's judgment on which direction Phase 3 iterates."
+verified: 2026-07-26T23:15:00Z
+status: passed
+score: 10/10 must-haves verified (build + outcome, v1+v2 combined)
+re_verification:
+  previous_status: human_needed
+  previous_score: "8/8 build truths verified; 0/1 outcome criteria met (owner iteration decision required)"
+  gaps_closed:
+    - "2-3 OOS-profitable configs (ROADMAP Success Criterion 1) — v2 iteration produced 5 real OOS survivors, exceeding the 2-3 floor"
+    - "Owner iteration decision — owner reviewed v1's honest 0-survivor result and approved the pre-registered v2 iteration (03-CONTEXT.md D-13...D-16), which has since been executed and verified"
+  gaps_remaining: []
+  regressions: []
 ---
 
 # Phase 3: Strategy Lab Verification Report
 
 **Phase Goal:** Find configs worth paper trading; kill the rest cheaply.
-**Verified:** 2026-07-26T21:30:00Z
-**Status:** human_needed
-**Re-verification:** No — initial verification
+**Verified:** 2026-07-26T23:15:00Z
+**Status:** passed
+**Re-verification:** Yes — after v2 iteration (v1 was `human_needed`, now closed by owner-approved, pre-registered v2 cycle)
 
 ## Goal Achievement
 
-This phase has two independent things to verify: (1) whether the BUILD (agents,
-frozen config, sweep engine, OOS discipline, reports, kill gate) is complete,
-honest, and unmodified after results were visible, and (2) whether the
-phase's OUTCOME (2-3 OOS-profitable configs) was achieved. The build passes
-in full. The outcome did not happen — and per the phase's own explicit rules,
-that is a valid, cheap result, not a build defect. The phase cannot close and
-cannot advance to Phase 4 without an owner decision, which is why status is
-`human_needed` rather than `passed`.
+Phase 3 ran two honest cycles. v1 (Plans 03-01..03-06) built the full harness
+correctly and produced a genuine zero-survivor result — a valid, cheap kill,
+not a defect. The owner reviewed that result and pre-registered a v2 iteration
+(03-CONTEXT.md D-13...D-16) **before any v2 result existed**: wider OOS windows
+(>=12 months) to fix an arithmetic mismatch between v1's 4-6 month windows and
+the 15-trade OOS floor, and entry-gate strictness as a new swept dimension.
+Plans 03-07/03-08 built and ran v2 for real. This verification re-examines the
+whole chain end-to-end: build integrity, freeze-before-results chronology, the
+real sweep/OOS numbers against the database and JSON artifacts, survivor trade
+authenticity, kill-condition correctness, v1 artifact immutability, and the
+full test suite.
 
-### Observable Truths (BUILD — must all be true for an honest kill decision)
-
-| # | Truth | Status | Evidence |
-|---|-------|--------|----------|
-| 1 | Momentum agent (RSI+volume surge) implemented as pure function over bars (STRAT-01) | VERIFIED | `trader/backtest/strategies/momentum.py` (97 lines): RSI(14)>=60 AND volume>2x 20-day baseline AND close>prior 20-day high, baseline/high windows excl. today's own bar. 7 fixture tests in `tests/test_strategy_momentum.py`, all passing. |
-| 2 | Breakout agent (20-day high after volatility contraction) implemented (STRAT-02) | VERIFIED | `trader/backtest/strategies/breakout.py` (90 lines): NR7 + 20-day-high break + 1.5x volume confirm, no-retest documented as deliberate scope. 7 fixture tests in `tests/test_strategy_breakout.py`, all passing. |
-| 3 | Exit-parameter sweep per asset class implemented and frozen before results (STRAT-03) | VERIFIED | `trader/backtest/exit_grid.py` yields 270/270/360 cells (stock/crypto_major_legacy_meme/new_memecoin), confirmed by direct execution. `frozen_config.py` hard-codes `FROZEN_HASH`; `compute_hash()` recomputed independently in this verification matches `FROZEN_HASH` exactly (both 64-char sha256 hex) and `verify_frozen()` does not raise against the current on-disk files. |
-| 4 | Configs tested across at least two regimes per asset class (STRAT-04) | VERIFIED | `regimes.py` REGIMES: stock (trending, choppy), crypto_major_legacy_meme (trending, bear), new_memecoin (mania, correction) — 6 regimes, 2 per bucket, confirmed by direct execution; every regime's `tune_end < oos_start`. |
-| 5 | Out-of-sample rule enforced — tune on A, validate on B never seen in tuning (STRAT-05) | VERIFIED | `sweep.py`'s `run_tune_sweep` slices bars to `[tune_start, tune_end]`; `run_oos_validation` independently slices to `[oos_start, oos_end]` via the same `_slice_bars` helper. `determine_survivor` enforces a 15-trade OOS floor before consulting profit_factor (proven insufficient_sample even at profit_factor=inf on thin samples, `tests/test_oos_validation.py`). DB query confirms 3600 tune rows + 30 oos rows (15 candidates x 2 reproducibility runs) tagged with `split=tune`/`split=oos` respectively. |
-| 6 | Pre-registered kill condition written for every surviving config before Phase 4 (STRAT-06) | VERIFIED (vacuously — 0 survivors) | `write_kill_conditions.py`'s `build_kill_conditions_text()` writes one `## ` header + 3 numeric triggers per survivor, or the exact nothing-survived sentence when zero survivors. `tests/test_kill_conditions.py::test_real_kill_conditions_file_matches_real_oos_results_survivor_list` cross-checks the real committed `KILL-CONDITIONS.md` 1:1 against real `oos_results.json` — passes. |
-| 7 | Frozen-before-results discipline (standing rule 1) enforced in code, not convention, at every gate | VERIFIED | `frozen_config.verify_frozen()` is called as the literal first statement in `run_tune_sweep` (sweep.py:121), `run_oos_validation` (sweep.py:235), and `write_kill_conditions.main()` (write_kill_conditions.py:135) — three independent call sites, confirmed by direct source read. Hash-tamper tests for all three exist and pass (`test_sweep_engine.py`, `test_oos_validation.py`, `test_kill_conditions.py`). |
-| 8 | Real sweep executed fully (not a fixture-only claim) | VERIFIED | Direct sqlite query against `data/trader.db`: exactly 3600 rows tagged `sweep_id=2026-07-26-strategy-lab-v1, split=tune` across all 12 (strategy x bucket x regime) combos — matches the exact expected count (2 strategies x 3 buckets x 2 regimes x cell-counts). `reports/backtests/tune_top5.json` (15 candidates) and `oos_results.json` (15 verdicts) independently verified against the DB: every candidate's trade_count clears its respective floor. |
-
-**Score:** 8/8 build truths verified.
-
-### Observable Truths (OUTCOME — the phase's actual success gate)
+### Observable Truths
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 9 | 2-3 strategy + exit-profile configs are profitable out-of-sample after fees/slippage (ROADMAP.md Success Criterion 1) | NOT MET | `oos_results.json`: 15/15 candidates verdict `insufficient_sample` (0 survivors, 0 killed). Confirmed by direct file read and DB cross-check. This is the honest, reproducible output of a real run against real cached market data — not a build gap. |
-| 10 | "If nothing survives, that result is accepted and work returns to Phase 3 — not forward" (ROADMAP.md Success Criterion 3) | MET (as a reporting truth) — but requires owner action | `KILL-CONDITIONS.md` and `reports/backtests/*-survivors.md` both carry the honest nothing-survived sentence. The report is accepted and honest. Whether work **actually returns to Phase 3** with a specific revision is an owner decision this verification cannot make — hence `human_needed`. |
+| 1 | v1 build (agents, frozen config, sweep engine, OOS discipline, reports, kill gate) is complete and honest | VERIFIED (unchanged from prior verification) | `git diff` between v1's completion commit (`54f191f`) and HEAD across all v1 core files (momentum.py, breakout.py, regimes.py, frozen_config.py, sweep.py, universe.py, exit_grid.py, run_tune_sweep_all.py, run_oos_validation_all.py, sweep_report.py, write_kill_conditions.py) returns **0 lines** — byte-identical. v1's own hash gate (`frozen_config.verify_frozen()`) still passes against current disk state. |
+| 2 | v2's regime windows and entry-variant registry were frozen (hash-locked) BEFORE any v2 result existed | VERIFIED | File mtimes, strictly increasing: `regimes_v2.py` 21:41:06 -> `momentum_v2.py` 21:44:14 -> `breakout_v2.py` 21:44:30 -> `frozen_config_v2.py` (freeze point) 21:46:00 -> `sweep_v2.py` (engine, consumes the freeze) 21:53:06 -> drivers 21:59-22:00 -> `tune_top5_v2.json` (results) 22:45:04 -> `oos_results_v2.json` 22:53:01 -> `KILL-CONDITIONS.md` 22:53:16. Commit timestamps corroborate the same order (`944563d`/`485a7b7`/`24be88f` all in the 21:41-21:46 window, before `639e69e`/`07649a8` at 21:54/22:00). No frozen file's mtime or commit falls after any result file's. |
+| 3 | v2's frozen hash is still valid (no post-hoc loosening of windows/variants) | VERIFIED | Independently recomputed `frozen_config_v2.compute_hash_v2()` in this session — matches hard-coded `FROZEN_HASH_V2` exactly (`0fba0822...556089f`). `verify_frozen_v2()` raises nothing against current disk state. |
+| 4 | The real v2 sweep executed the full pre-registered grid — exactly 10,800 tune-sweep runs | VERIFIED | Direct sqlite query against `data/trader.db`: `COUNT(*)` of `backtest_runs` rows with `sweep_id="v2", split="tune"` = **10,800** (exact match to D-14's pre-registered estimate and the SUMMARY's claim). |
+| 5 | 25 tune candidates advanced to OOS; every OOS verdict is real, not narrated | VERIFIED | `reports/backtests/tune_top5_v2.json` has 25 entries; `reports/backtests/oos_results_v2.json` has 25 entries; DB confirms 25 rows with `sweep_id="v2", split="oos"`. Verdict counts: **5 survivor / 8 killed / 12 insufficient_sample** — matches the SUMMARY and the orchestrator's claim exactly. |
+| 6 | Survivors genuinely cleared the pre-registered floors (>=15 OOS trades, profitable after costs) | VERIFIED | All 5 survivors: `momentum_stock/stock/choppy_v2/loose`, OOS profit_factor 2.348-20.434, trade_count 32-85 (all >=15). `determine_survivor()` (imported unchanged from v1's `sweep.py`, D-15) requires `trade_count >= 15` and `profit_factor > 1.0` post-fee/slippage. Spot-checked 3 of 5 survivors' `oos_run_id`s (14552, 14554, 14556) directly in `backtest_trades`: real trade rows (32/85/85, matching JSON exactly), real symbols (NFLX, NVDA, JPM, AMD, AMZN, META), real entry/exit dates entirely inside the choppy_v2 OOS window (2016-08-08 to 2017-12-29, safely after `tune_end=2016-06-30`, no leakage), real non-zero fees, mixed win/loss outcomes (not a fabricated all-win pattern). |
+| 7 | KILL-CONDITIONS.md carries concrete numeric triggers per survivor, committed | VERIFIED | Regenerated file has 5 `##` entries (one per survivor), each with PF floor (0.9, shared v1 constant), a per-survivor max-drawdown kill level, and consecutive-loss count (8). Spot-checked survivor 1's drawdown trigger: `1.5 * -0.00638508 = -0.0096`, matches the file's `-0.0096` exactly — computed from real OOS metrics, not hand-entered. Committed in `35b42ee`. |
+| 8 | v1 artifacts remain byte-unmodified after the v2 cycle | VERIFIED | `git diff 54f191f HEAD` on all v1 core source files = 0 lines. `reports/backtests/tune_top5.json` (mtime 20:17) and `oos_results.json` (mtime 20:31) both predate the v2 session start (21:41) by over an hour; `2026-07-26-survivors.md` mtime 20:44, also predates. v2 writes only to `-v2`-suffixed filenames or run_id-disambiguated report files, plus the one file (KILL-CONDITIONS.md) D-16 explicitly designates for overwrite. |
+| 9 | Full test suite is green | VERIFIED | `pytest tests/ -q` -> **347 passed**, 0 failed (matches the expected count exactly; SUMMARY's documented 346/347-with-1-known-failure was resolved by a subsequent, legitimate rescope of `test_kill_conditions.py`'s hardcoded v1-only cross-check to check the latest OOS cycle per D-16 — commit `578dbf3` — not a floor/threshold edit). |
+| 10 | 2-3 strategy + exit-profile configs are profitable OOS after fees/slippage (ROADMAP Success Criterion 1) | VERIFIED (exceeded) | 5 real OOS survivors exceed the 2-3 floor. This is the gap that made the prior verification `human_needed`; it is now closed by the owner-approved, pre-registered v2 iteration. |
 
-### Anti-Tampering Check (scrutiny requested by orchestrator)
+**Score:** 10/10 truths verified.
 
-Checked whether frozen thresholds, windows, or floors were edited after results became visible:
+### Anti-Tampering / Honest-Outcome Check (v1 -> v2 chain scrutiny)
 
-- **Hash match:** Independently recomputed `frozen_config.compute_hash()` in this verification session; it matches the hard-coded `FROZEN_HASH` exactly. The three frozen files (`universe.py`, `regimes.py`, `exit_grid.py`) are byte-identical to what the hash was computed against.
-- **File mtime ordering:** `universe.py` (19:39:25) and `regimes.py` (19:39:39) and `exit_grid.py` (19:41:03) were all last modified *before* `frozen_config.py` (19:41:40, the hash freeze point), which was in turn modified *before* `tune_top5.json` was produced (20:17:07), which was *before* `oos_results.json` (20:31:33), which was *before* `KILL-CONDITIONS.md` (20:44:53). This chronology is consistent with "freeze config, then run sweep, then view results, then report" — no evidence of a frozen file being touched after results existed.
-- **Floor values:** The 30-trade tune floor (`select_top5`, sweep.py:167) and 15-trade OOS floor (`determine_survivor`, sweep.py:294) are hard-coded defaults in the same commit history as the engine itself (Plans 03-03/03-05), not post-hoc edits made after the 0-survivor result was seen — both floors are directly unit-tested against synthetic fixtures independent of the real run's outcome.
-- **No loosening found:** No grep hits for edited thresholds, no diff between `params_json` provenance and the frozen grid definitions, no divergent `FROZEN_HASH` value anywhere in the codebase.
+- **No results-then-loosen pattern found.** v2's floors (30-trade tune, 15-trade OOS), fee/slippage models, and the exit grid itself are imported unchanged from v1 (`sweep.select_top5`, `sweep.determine_survivor` — identity-checked in `tests/test_sweep_engine_v2.py`), never redefined for v2. D-15 explicitly pre-registers this non-negotiable.
+- **v2's diagnosis was written before v2 ran.** D-13/D-14 (03-CONTEXT.md) diagnose v1's root cause (window/floor arithmetic mismatch, breakout's single fixed gate) and prescribe the fix, dated in the same context file that records v1's actual 0-survivor outcome — the fix targets a structural gap, not a result.
+- **One post-hoc test edit found and evaluated:** commit `578dbf3` (after v2's KILL-CONDITIONS.md was already regenerated) changed `test_kill_conditions.py`'s hardcoded v1-only cross-check to check whichever OOS results file is "latest" (v2's if present, else v1's). This is a mechanical fix to a test that hardcoded a file path assumption invalidated by D-16's designed KILL-CONDITIONS.md supersession — it does not touch any threshold, floor, fee model, or verdict logic, and was flagged as a known, expected consequence in 03-08-SUMMARY.md before being fixed. Not a criteria-loosening edit.
+- **v1's own hash gate still holds** (`frozen_config.verify_frozen()` passes) and v2's hash gate holds (`frozen_config_v2.verify_frozen_v2()` passes) — no gate was disabled or bypassed to reach the 5-survivor outcome.
 
-**Conclusion: no evidence of criteria-editing after results were visible. The nothing-survived outcome is honest.**
+**Conclusion: the v2 iteration is a genuine, pre-registered, honest re-run — not a post-hoc adjustment to manufacture survivors.**
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `trader/backtest/strategies/momentum.py` | STRAT-01 pure function | VERIFIED | 97 lines, real RSI/volume/breakout logic, no stubs |
-| `trader/backtest/strategies/breakout.py` | STRAT-02 pure function | VERIFIED | 90 lines, real NR7/breakout/volume logic, no stubs |
-| `trader/backtest/universe.py` | Frozen 25-symbol universe | VERIFIED | 18/4/3 split confirmed by direct execution |
-| `trader/backtest/regimes.py` | 6 frozen regime windows | VERIFIED | tune_end < oos_start for all 6, confirmed |
-| `trader/backtest/exit_grid.py` | 270/270/360-cell grid | VERIFIED | Exact cell counts confirmed by direct execution |
-| `trader/backtest/frozen_config.py` | Hash gate | VERIFIED | Hash recomputed and matches; verify_frozen() passes |
-| `trader/backtest/sweep.py` | Sweep + OOS engine | VERIFIED | run_tune_sweep, select_top5, run_oos_validation, determine_survivor all present, gated, provenance-tagged |
-| `trader/backtest/run_tune_sweep_all.py` | Real tune-sweep driver | VERIFIED | Drove the real 3600-row sweep (DB-confirmed) |
-| `trader/backtest/run_oos_validation_all.py` | Real OOS driver | VERIFIED | Drove the real 30-row (15x2) OOS run (DB-confirmed) |
-| `trader/backtest/sweep_report.py` | Per-config reports | VERIFIED | 196 lines; real reports on disk (gitignored per D-12, confirmed present) |
-| `trader/backtest/write_kill_conditions.py` | Kill-condition gate | VERIFIED | Defence-in-depth verify_frozen() first; produced the real committed KILL-CONDITIONS.md |
-| `.planning/phases/03-strategy-lab/KILL-CONDITIONS.md` | Honest kill-condition record | VERIFIED | Exact nothing-survived sentence, cross-check test passes |
-| `reports/backtests/tune_top5.json` | Real 15-candidate tune output | VERIFIED (on disk, gitignored per D-12) | 15 candidates, all clear 30-trade floor |
-| `reports/backtests/oos_results.json` | Real 15-verdict OOS output | VERIFIED (on disk, gitignored per D-12) | 15 verdicts, all insufficient_sample |
+| `trader/backtest/regimes_v2.py` | 6 frozen v2 regime windows, OOS >= 12mo | VERIFIED | Hash-locked, confirmed unmodified since commit |
+| `trader/backtest/strategies/momentum_v2.py` / `breakout_v2.py` | 3 entry variants each | VERIFIED | "loose" variant produced all 5 real survivors; hash-locked |
+| `trader/backtest/frozen_config_v2.py` | v2 hash gate | VERIFIED | Recomputed hash matches `FROZEN_HASH_V2`; `verify_frozen_v2()` passes |
+| `trader/backtest/sweep_v2.py` | Variant-aware sweep/OOS engine | VERIFIED | Reuses `_slice_bars`/`select_top5`/`determine_survivor` from v1 unchanged |
+| `trader/backtest/run_tune_sweep_all_v2.py` / `run_oos_validation_all_v2.py` | Real v2 drivers | VERIFIED | Drove the real 10,800-row sweep + 25-row OOS run (DB-confirmed) |
+| `trader/backtest/write_kill_conditions_v2.py` | v2 kill-condition gate | VERIFIED | Produced the real, committed, regenerated `KILL-CONDITIONS.md` |
+| `reports/backtests/tune_top5_v2.json` | 25 real candidates | VERIFIED (on disk, gitignored per D-12) | 25 entries, matches DB |
+| `reports/backtests/oos_results_v2.json` | 25 real verdicts | VERIFIED (on disk, gitignored per D-12) | 5 survivor / 8 killed / 12 insufficient_sample, matches DB and ledger |
+| `.planning/phases/03-strategy-lab/KILL-CONDITIONS.md` | 5 concrete numeric-trigger entries | VERIFIED | Regenerated, committed (`35b42ee`), values cross-checked against real OOS metrics |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|-----|-----|--------|---------|
-| `run_tune_sweep_all.py` | `sweep.run_tune_sweep` | direct call | WIRED | Real 3600-row DB result confirms execution |
-| `run_tune_sweep` | `frozen_config.verify_frozen()` | first statement | WIRED | sweep.py:121, confirmed by source read |
-| `run_oos_validation_all.py` | `sweep.run_oos_validation` | direct call | WIRED | Real 30-row DB result confirms execution |
-| `run_oos_validation` | `frozen_config.verify_frozen()` | first statement | WIRED | sweep.py:235, confirmed by source read |
-| `write_kill_conditions.main()` | `frozen_config.verify_frozen()` | first statement | WIRED | write_kill_conditions.py:135, confirmed by source read |
-| `write_kill_conditions.main()` | `oos_results.json` -> `KILL-CONDITIONS.md` | read + build_kill_conditions_text + write | WIRED | Real file cross-check test passes; committed file matches real oos_results.json 1:1 |
-| `sweep.run_tune_sweep`/`run_oos_validation` | `runner.run_backtest` (Phase 2 engine) | unmodified call | WIRED | No bypass path found in sweep.py; both functions call `runner.run_backtest` directly with real fees/slippage config |
+| `run_tune_sweep_all_v2.py` | `sweep_v2.run_tune_sweep_v2` | direct call | WIRED | Real 10,800-row DB result confirms execution |
+| `sweep_v2.run_tune_sweep_v2`/`run_oos_validation_v2` | `frozen_config_v2.verify_frozen_v2()` | first statement | WIRED | Confirmed by source read + passing hash-tamper tests |
+| `sweep_v2.py` | `sweep.select_top5` / `sweep.determine_survivor` (v1) | imported, unchanged | WIRED | D-15 compliance confirmed; identity-checked in tests |
+| `write_kill_conditions_v2.main()` | `oos_results_v2.json` -> `KILL-CONDITIONS.md` | read + build text + overwrite | WIRED | Real file cross-check; numeric triggers recomputed and matched independently in this verification |
+| `oos_results_v2.json` survivors | `backtest_trades` ledger | `oos_run_id` | FLOWING | 3 of 5 survivors' trade rows spot-checked directly; counts, symbols, dates, fees all real |
 
 ### Data-Flow Trace (Level 4)
 
 | Artifact | Data Variable | Source | Produces Real Data | Status |
 |----------|---------------|--------|---------------------|--------|
-| `tune_top5.json` | `select_top5` output | `run_tune_sweep` over real `data/trader.db` bars | Yes — 3600 real DB rows confirmed | FLOWING |
-| `oos_results.json` | `run_oos_validation` output | Real candidates x real OOS-window bars | Yes — 30 real DB rows confirmed, trade counts match DB | FLOWING |
-| `KILL-CONDITIONS.md` | `build_kill_conditions_text(oos_results)` | Real `oos_results.json` (0 survivors) | Yes — content cross-checked 1:1 against real file | FLOWING |
+| `tune_top5_v2.json` | `select_top5` output over 10,800 real cells | `run_tune_sweep_v2` over real `data/trader.db` bars | Yes — 10,800 real DB rows confirmed | FLOWING |
+| `oos_results_v2.json` | `run_oos_validation_v2` output | Real candidates x real OOS-window bars | Yes — 25 real DB rows, trade counts match ledger exactly | FLOWING |
+| `KILL-CONDITIONS.md` | `build_kill_conditions_text(oos_results_v2)` | Real `oos_results_v2.json` (5 survivors) | Yes — drawdown trigger independently recomputed from real OOS metrics and matched | FLOWING |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| Full test suite passes | `.venv/Scripts/python.exe -m pytest tests/ -q` | 217 passed in 64.44s | PASS (matches expected 217, ~75s budget) |
-| Frozen hash matches on-disk files | `compute_hash()` vs `FROZEN_HASH` | Identical 64-char sha256 | PASS |
-| `verify_frozen()` does not raise against current files | direct call | No exception | PASS |
-| Tune-sweep row count matches expected total | sqlite `COUNT(*)` filtered by sweep_id/split=tune | 3600 | PASS |
-| OOS row count / verdict distribution | sqlite + JSON read | 30 rows (15 candidates x 2 runs); all 15 unique candidates `insufficient_sample` | PASS |
-| Exit-grid cell counts | direct `exit_profile_grid()` call per bucket | 270/270/360 | PASS |
-| Regime tune/OOS ordering | direct `REGIMES` iteration | tune_end < oos_start for all 6 | PASS |
-| Universe symbol counts | direct `UNIVERSE_BY_BUCKET` read | 18/4/3 = 25 | PASS |
+| Full test suite passes | `pytest tests/ -q` | 347 passed, 0 failed | PASS |
+| v2 frozen hash matches on-disk files | `compute_hash_v2()` vs `FROZEN_HASH_V2` | Identical 64-char sha256 | PASS |
+| v1 frozen hash still valid | `compute_hash()` vs `FROZEN_HASH` | Identical, `verify_frozen()` no exception | PASS |
+| v2 tune-sweep row count | sqlite `COUNT(*)` filtered `sweep_id=v2,split=tune` | 10,800 | PASS |
+| v2 OOS row count / verdict distribution | sqlite + JSON read | 25 rows; 5 survivor / 8 killed / 12 insufficient_sample | PASS |
+| Survivor ledger spot-check (3 of 5) | sqlite `backtest_trades` by `oos_run_id` | Real trades, dates within OOS window, non-zero fees, mixed win/loss | PASS |
+| v1 core files unmodified since v1 completion | `git diff 54f191f HEAD -- <11 v1 files>` | 0 lines | PASS |
+| v1 data artifacts predate v2 session | mtimes: `tune_top5.json` 20:17, `oos_results.json` 20:31, `survivors.md` 20:44 vs v2 start 21:41 | All predate by 50min+ | PASS |
+| KILL-CONDITIONS.md drawdown trigger recomputation | `1.5 * -0.00638508` vs file's `-0.0096` | Match | PASS |
 
 ### Probe Execution
 
-No `scripts/*/tests/probe-*.sh` convention exists in this repository; no PLAN/SUMMARY declares probe-based verification. This phase's real acceptance runs (`run_tune_sweep_all`, `run_oos_validation_all`, `write_kill_conditions`) are the phase's own equivalent, and their outputs were independently cross-checked against the live database above rather than re-executed (re-running would append new rows to the append-only ledger and was excluded per the read-only constraint of this verification).
+No `scripts/*/tests/probe-*.sh` convention exists in this repository. This phase's real acceptance runs (`run_tune_sweep_all_v2`, `run_oos_validation_all_v2`, `write_kill_conditions_v2`) are the phase's own equivalent; their outputs were cross-checked against the live database and ledger above rather than re-executed (re-running would append new rows to the append-only ledger and was excluded per the read-only constraint of this verification).
 
 ### Requirements Coverage
 
 | Requirement | Source Plan | Description | Status | Evidence |
-|-------------|-------------|-------------|--------|----------|
-| STRAT-01 | 03-01 | Momentum agent (RSI+volume surge) as pure function | SATISFIED | momentum.py, 7 passing tests |
-| STRAT-02 | 03-01 | Breakout agent (20-day high after vol. contraction) | SATISFIED | breakout.py, 7 passing tests |
-| STRAT-03 | 03-02, 03-03, 03-04 | Exit-parameter sweep per asset class | SATISFIED | exit_grid.py + sweep.py + real 3600-row run |
-| STRAT-04 | 03-02, 03-04, 03-05 | Configs tested across >=2 regimes | SATISFIED | regimes.py (6 regimes, 2/bucket), real sweep spans all |
-| STRAT-05 | 03-02, 03-04, 03-05 | OOS rule enforced (tune A, validate B) | SATISFIED | run_oos_validation + determine_survivor, real 15-candidate run |
-| STRAT-06 | 03-06 | Pre-registered kill condition per surviving config | SATISFIED (vacuous — 0 survivors, explicitly stated) | KILL-CONDITIONS.md, cross-check test |
+|-------------|-------------|--------------|--------|----------|
+| STRAT-01 | 03-01 | Momentum agent (RSI+volume surge) as pure function | SATISFIED | Unchanged since prior verification; `git diff` confirms no regression |
+| STRAT-02 | 03-01 | Breakout agent (20-day high after vol. contraction) | SATISFIED | Unchanged since prior verification |
+| STRAT-03 | 03-02..04, 03-07, 03-08 | Exit-parameter sweep per asset class | SATISFIED | v1's 3,600-run sweep + v2's 10,800-run sweep, both DB-confirmed |
+| STRAT-04 | 03-02, 03-04, 03-05, 03-07, 03-08 | Configs tested across >=2 regimes | SATISFIED | v1's 6 regimes + v2's 6 regimes (`regimes_v2.REGIMES_V2`, OOS >= 12mo each) |
+| STRAT-05 | 03-02, 03-04, 03-05, 03-07, 03-08 | OOS rule enforced (tune A, validate B) | SATISFIED | v2's `run_oos_validation_v2` reuses v1's `_slice_bars`/verdict logic unchanged; ledger spot-check confirms no leakage |
+| STRAT-06 | 03-06, 03-08 | Pre-registered kill condition per surviving config | SATISFIED (now non-vacuous — 5 real survivors) | `KILL-CONDITIONS.md` regenerated with 5 concrete numeric-trigger entries, cross-checked against real OOS metrics |
 
-No orphaned requirements — REQUIREMENTS.md maps only STRAT-01…06 to Phase 3, and all six appear across the six plans' `requirements` frontmatter fields.
+No orphaned requirements — REQUIREMENTS.md maps only STRAT-01...06 to Phase 3, and all six appear across the eight plans' `requirements` frontmatter fields.
 
 ### Anti-Patterns Found
 
-None. Grep for `TBD|FIXME|XXX|TODO|HACK|PLACEHOLDER|not yet implemented|not available|coming soon` (case-insensitive) across all phase source files (`momentum.py`, `breakout.py`, `universe.py`, `regimes.py`, `exit_grid.py`, `frozen_config.py`, `sweep.py`, `run_tune_sweep_all.py`, `run_oos_validation_all.py`, `sweep_report.py`, `write_kill_conditions.py`) returned zero matches.
+None. Grep for `TBD|FIXME|XXX|TODO|HACK|PLACEHOLDER|not yet implemented|coming soon` (case-insensitive) across all v2 phase source files (`sweep_v2.py`, `run_tune_sweep_all_v2.py`, `run_oos_validation_all_v2.py`, `sweep_report_v2.py`, `write_kill_conditions_v2.py`, `regimes_v2.py`, `frozen_config_v2.py`, `momentum_v2.py`, `breakout_v2.py`) returned zero true matches (one incidental hit — a SQL parameter variable literally named `placeholders`, unrelated to stub/debt markers).
 
 ### Human Verification Required
 
-### 1. Owner's Phase 3 iteration decision
-
-**Test:** Review the sweep's honest result — 3,600 tune-sweep cells, 15 momentum candidates cleared the 30-trade tune floor (breakout cleared zero), all 15 came back `insufficient_sample` against their 15-trade OOS floor (0 survivors, 0 killed) — and decide how Phase 3 proceeds.
-
-**Expected:** One of: (a) accept the cheap-kill result and specify a concrete revision (e.g., widen OOS windows beyond 4-6 months, extend the universe's cached history, reconsider the 15-trade OOS floor's interaction with short OOS windows, add strategies/regimes) and loop back within Phase 3; or (b) explicitly override via VERIFICATION.md frontmatter if there is a reason to advance despite zero OOS survivors (would need to be reconciled against ROADMAP.md's Success Criterion 1 and standing rule 5).
-
-**Why human:** This is the exact decision point the phase document, ROADMAP.md, and 03-CONTEXT.md all reserve for the owner ("If NOTHING survives — that's a valid, cheap result. Go back to Phase 3, not forward"). No grep or test can make this call; it is a strategy/business judgment, not a code-correctness question.
+None. The single item that previously required human judgment (the owner's Phase 3 iteration decision) has been resolved: the owner reviewed v1's honest zero-survivor result and pre-registered the v2 iteration (03-CONTEXT.md D-13...D-16, dated "OWNER-APPROVED 2026-07-26"), which has since executed and produced a verified, non-vacuous result. No further human decision point remains open for this phase.
 
 ### Gaps Summary
 
-No build gaps found. All STRAT-01…06 requirements are satisfied by real, wired, tested, non-stub code. The frozen-before-results discipline is enforced at three independent gate call sites and verified un-tampered via independent hash recomputation and file-mtime chronology. The full 217-test suite passes. The real sweep executed to completion with exact expected row counts (3600 tune rows, 12 combos, 15 OOS candidates, 30 OOS rows across two reproducibility runs) confirmed directly against `data/trader.db`, not merely SUMMARY.md narration.
-
-The phase's outcome — 2-3 OOS-profitable configs — did not occur. Per ROADMAP.md's own Success Criterion 3 and the phase document's explicit framing, this is a valid, cheap result rather than a defect, but it means the phase cannot close on Success Criterion 1 and cannot advance to Phase 4. Status is `human_needed`: the owner must make the iteration call described above.
+None. Both v1 and v2 build components are complete, wired, tested, and non-stub.
+The v1 -> v2 chronology shows no evidence of criteria being loosened after
+results were visible: every frozen file's mtime and commit predates the result
+files it gates, both hash gates (v1's and v2's) independently re-verify clean
+in this session, and the one post-hoc test edit found is a mechanical file-path
+rescope, not a threshold change. The real v2 sweep executed to the exact
+pre-registered scale (10,800 runs), produced 25 real candidates with real OOS
+verdicts (5 survivor / 8 killed / 12 insufficient_sample), and 3 of the 5
+survivors' underlying trades were independently spot-checked directly against
+the ledger — real symbols, real dates within the correct OOS window, real fees,
+mixed win/loss outcomes. `KILL-CONDITIONS.md` carries 5 concrete, independently
+recomputed numeric kill triggers. All three ROADMAP.md Success Criteria for
+Phase 3 are now met: (1) 5 OOS-profitable configs exceed the 2-3 floor, (2)
+pre-registered kill conditions are committed before Phase 4, and (3) the
+honest-outcome discipline (v1's real zero-survivor result, accepted and looped
+back rather than fudged) was demonstrably followed. The full 347-test suite is
+green. Phase 3's goal — "find configs worth paper trading; kill the rest
+cheaply" — is achieved. Ready to proceed to Phase 4.
 
 ---
 
-_Verified: 2026-07-26T21:30:00Z_
+_Verified: 2026-07-26T23:15:00Z_
 _Verifier: Claude (gsd-verifier)_
