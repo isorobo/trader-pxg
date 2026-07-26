@@ -35,7 +35,7 @@ The journey runs from free data collection to full-size automated trading in ele
 **Plans**: 5 plans
 
 Plans:
-- [ ] 00-01-PLAN.md — Repo skeleton, pinned deps, .env + CoinGecko demo key
+- [x] 00-01-PLAN.md — Repo skeleton, pinned deps, .env + CoinGecko demo key
 - [ ] 00-02-PLAN.md — Snapshot schema (db.py) + stock/crypto source adapters (sources.py)
 - [ ] 00-03-PLAN.md — Poll orchestration (poll.py) + Task Scheduler registration
 - [ ] 00-04-PLAN.md — Daily report generator (report.py)

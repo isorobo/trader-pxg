@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 25 July 2026)
 ## Current Position
 
 Phase: 0 of 0–10 (Ground Truth)
-Plan: 0 of 5 in current phase
-Status: Ready to execute
-Last activity: 2026-07-26 — Phase 0 planned: 5 plans in 4 waves; research + validation done; checker passed after 1 revision
+Plan: 1 of 5 in current phase
+Status: In progress (executing)
+Last activity: 2026-07-26 — Plan 00-01 complete (repo skeleton, deps, CoinGecko key); Wave 2 running
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 2%
 
 ## Performance Metrics
 
