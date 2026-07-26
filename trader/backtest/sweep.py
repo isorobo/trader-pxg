@@ -136,3 +136,35 @@ def run_tune_sweep(
         results.append({"run_id": run_id, "params": params, "metrics": cell_metrics})
 
     return results
+
+
+def select_top5(cell_results: list[dict], min_trades: int = 30) -> list[dict]:
+    """D-10's pre-registered top-5 rule: the only code path that selects
+    which tune-sweep cells advance to OOS validation (T-03-11).
+
+    Filters to cells whose `metrics.trade_count` clears `min_trades` (a
+    cherry-picked lucky small-N cell is excluded from ranking entirely,
+    regardless of how high its profit_factor is), then ranks the survivors
+    descending by `metrics.profit_factor` -- deliberately post-cost profit
+    factor, never raw return, per 03-RESEARCH.md's Overfitting Guards #2:
+    `compute_metrics` already reflects fees and slippage, so ranking by it
+    is the honest metric. `math.inf` (zero losing trades) sorts above every
+    finite value naturally; a `None` profit_factor (zero trades) floors to
+    0.0 for ranking purposes only -- it can only occur here if `min_trades`
+    is passed as 0, since a real trade_count >= 1 always yields a non-None
+    profit_factor.
+
+    Returns at most 5 results, in descending profit_factor order. Fewer
+    than 5 eligible cells returns all of them (no padding); zero eligible
+    cells returns an empty list (not an error).
+    """
+    eligible = [r for r in cell_results if r["metrics"]["trade_count"] >= min_trades]
+    eligible.sort(
+        key=lambda r: (
+            r["metrics"]["profit_factor"]
+            if r["metrics"]["profit_factor"] is not None
+            else 0.0
+        ),
+        reverse=True,
+    )
+    return eligible[:5]
