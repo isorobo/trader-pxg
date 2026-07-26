@@ -129,13 +129,17 @@ def test_max_drawdown_trigger_never_looser_than_floor():
 
 
 def test_real_kill_conditions_file_matches_real_oos_results_survivor_list():
-    """Cross-checks the committed KILL-CONDITIONS.md 1:1 against the real
-    reports/backtests/oos_results.json survivor list -- a missing or extra
-    entry fails this test."""
-    assert OOS_RESULTS_PATH.exists(), "real oos_results.json must exist (Plan 03-05's output)"
-    assert KILL_CONDITIONS_PATH.exists(), "real KILL-CONDITIONS.md must exist after Plan 03-06's run"
+    """Cross-checks the committed KILL-CONDITIONS.md 1:1 against the LATEST
+    real OOS results (D-16: the file always reflects the most recent
+    pre-registered sweep cycle -- v2's oos_results_v2.json when present,
+    else v1's oos_results.json). A missing or extra entry fails this test."""
+    latest_oos_path = OOS_RESULTS_PATH.with_name("oos_results_v2.json")
+    if not latest_oos_path.exists():
+        latest_oos_path = OOS_RESULTS_PATH
+    assert latest_oos_path.exists(), "a real oos_results JSON must exist (Plan 03-05/03-08 output)"
+    assert KILL_CONDITIONS_PATH.exists(), "real KILL-CONDITIONS.md must exist after Plan 03-06/03-08's run"
 
-    oos_results = json.loads(OOS_RESULTS_PATH.read_text())
+    oos_results = json.loads(latest_oos_path.read_text())
     survivors = [r for r in oos_results if r["verdict"] == "survivor"]
     committed_text = KILL_CONDITIONS_PATH.read_text(encoding="utf-8")
 

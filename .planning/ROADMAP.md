@@ -97,8 +97,8 @@ Plans:
 - [x] 03-04-PLAN.md — Real tune-sweep execution across both strategies, all 3 buckets, all 6 regimes (STRAT-03, STRAT-04, STRAT-05)
 - [x] 03-05-PLAN.md — OOS validation engine + real run against every top-5 candidate's held-out window (STRAT-04, STRAT-05)
 - [x] 03-06-PLAN.md — Sweep reports (tune vs OOS, per-symbol P&L) + KILL-CONDITIONS.md phase-exit gate (STRAT-06) — v1 concluded honestly: 0 survivors / 15 insufficient_sample
-- [ ] 03-07-PLAN.md — v2 (owner-approved): frozen v2 regime windows (OOS >= 12mo per bucket) + 3 momentum/3 breakout entry-gate variants + v2 hash gate, zero v1 modification (STRAT-03, STRAT-04, STRAT-05)
-- [ ] 03-08-PLAN.md — v2 sweep + OOS validation (~10,800 runs, detached/checkpoint-resumable) + regenerated KILL-CONDITIONS.md from v2 results (STRAT-03, STRAT-04, STRAT-05, STRAT-06)
+- [x] 03-07-PLAN.md — v2 (owner-approved): frozen v2 regime windows (OOS >= 12mo per bucket) + 3 momentum/3 breakout entry-gate variants + v2 hash gate, zero v1 modification (STRAT-03, STRAT-04, STRAT-05)
+- [x] 03-08-PLAN.md — v2 sweep + OOS validation (~10,800 runs, detached/checkpoint-resumable) + regenerated KILL-CONDITIONS.md from v2 results (STRAT-03, STRAT-04, STRAT-05, STRAT-06)
 
 ### Phase 4: Risk Gate & Sizer
 **Goal**: The safety layer, built before anything can trade.
@@ -111,11 +111,11 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Frozen risk config (liquidity/spread/correlation/sizer/breaker constants) + breaker_events migration (RISK-01, RISK-02, RISK-03)
-- [ ] 04-02-PLAN.md — Risk gate: liquidity/listing-age/spread checks + correlation cluster elimination + reason codes (RISK-01)
-- [ ] 04-03-PLAN.md — Position sizer: deterministic cap order, golden fixture, hypothesis cap-invariant property tests (RISK-02)
-- [ ] 04-04-PLAN.md — Circuit breakers: incremental no-lookahead evaluation + append-only persistence + human-only manual-restart CLI (RISK-03)
-- [ ] 04-05-PLAN.md — Poisoned-list acceptance test: gate + sizer two-stage pipeline, D-07 exit gate (RISK-04, RISK-01, RISK-02)
+- [x] 04-01-PLAN.md — Frozen risk config (liquidity/spread/correlation/sizer/breaker constants) + breaker_events migration (RISK-01, RISK-02, RISK-03)
+- [x] 04-02-PLAN.md — Risk gate: liquidity/listing-age/spread checks + correlation cluster elimination + reason codes (RISK-01)
+- [x] 04-03-PLAN.md — Position sizer: deterministic cap order, golden fixture, hypothesis cap-invariant property tests (RISK-02)
+- [x] 04-04-PLAN.md — Circuit breakers: incremental no-lookahead evaluation + append-only persistence + human-only manual-restart CLI (RISK-03)
+- [x] 04-05-PLAN.md — Poisoned-list acceptance test: gate + sizer two-stage pipeline, D-07 exit gate (RISK-04, RISK-01, RISK-02)
 
 ### Phase 5: Paper Trading Loop
 **Goal**: The full pipeline running live on fake money — stocks via IBKR paper, crypto via simulated ledger.
