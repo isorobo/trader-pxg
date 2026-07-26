@@ -42,6 +42,13 @@ Auto-selected recommended defaults (owner's standing auto-advance directive). Ov
 ### Claude's Discretion
 - RSI period/thresholds and volume-surge definition details (informed by library file 07), volatility-contraction measure for breakout (file 03), sweep parallelisation/runtime management, report formatting.
 
+### Iteration v2 (OWNER-APPROVED 2026-07-26 — "run it as recommended")
+Context: v1 concluded honestly with 0 survivors / 15 insufficient_sample. Diagnosis: 4–6-month OOS windows arithmetically incompatible with the 15-trade floor at observed trade frequency; breakout's fixed entry gate produced zero 30-trade tune cells. These v2 decisions are pre-registered BEFORE any v2 results exist.
+- **D-13 (v2):** New frozen regime config v2: OOS windows extended to ≥ 12 months per bucket (or the maximum available for short-history memecoin symbols), tune windows adjusted to fit available history, tune_end < oos_start preserved. Windows derived from the same verified data facts in 03-RESEARCH.md and FROZEN (new hash) before any v2 run.
+- **D-14 (v2):** Entry-gate strictness becomes a SWEPT dimension: 3 pre-registered momentum entry variants (strict/base/loose on RSI threshold + volume multiplier) and 3 breakout variants (contraction-gate strictness), defined in code before results. Total v2 grid ≈ 3× v1 (~10,800 runs, est. 4–5 h single-threaded, detached process + monitor).
+- **D-15 (v2):** UNCHANGED (deliberately): the ≥30-trade tune floor, the ≥15-trade OOS floor, the top-5 rule, all fee/slippage models, and the fill/exit engine. Floors are not weakened to manufacture survivors.
+- **D-16 (v2):** v1 artefacts remain untouched on disk and in the ledger (sweep_id distinguishes v2); KILL-CONDITIONS.md is regenerated from v2's oos_results only after the v2 cycle completes.
+
 </decisions>
 
 <canonical_refs>
