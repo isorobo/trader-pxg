@@ -43,10 +43,14 @@ def _insert_event(conn, **overrides):
 
 
 def test_migration_0004_reaches_schema_version_4(data_conn):
-    max_version = data_conn.execute(
-        "SELECT MAX(version) FROM schema_version"
-    ).fetchone()[0]
-    assert max_version == 4
+    # Checks migration 0004 has been applied, not that it is the highest
+    # version present -- later phases (e.g. migrations/0005_paper_trading.sql)
+    # add further migrations on top, so schema_version's max legitimately
+    # grows beyond 4 without this test needing to change.
+    applied_versions = {
+        row[0] for row in data_conn.execute("SELECT version FROM schema_version").fetchall()
+    }
+    assert 4 in applied_versions
 
 
 def test_migration_0004_creates_breaker_events_table(data_conn):
