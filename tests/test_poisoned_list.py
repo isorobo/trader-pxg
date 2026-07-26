@@ -178,3 +178,68 @@ def test_gate_stage_poisoned_list_matches_research_q6():
 
     accepted_symbols = {a["symbol"] for a in accepted}
     assert accepted_symbols == {"CORRB", "MEMER/USDT", "CLEAN1", "CLEAN2"}
+
+
+# --------------------------------------------------------------------------
+# Task 2: two-stage pipeline -- sizer clips the memecoin allocation
+# --------------------------------------------------------------------------
+
+
+def test_two_stage_pipeline_sizer_clips_memecoin_allocation():
+    candidates, market_data, corra_bars, corrb_bars = _build_poisoned_fixture()
+
+    accepted, rejected = gate.apply_risk_gate(candidates, market_data, config)
+    assert {a["symbol"] for a in accepted} == {"CORRB", "MEMER/USDT", "CLEAN1", "CLEAN2"}
+
+    # Sizer volatility is hardcoded per candidate here (04-05-PLAN.md Task
+    # 2 <action>) -- this test exercises the gate+sizer reason-code/clip
+    # contract, not compute_volatility's own math, which is already
+    # unit-tested separately in tests/test_position_sizer.py.
+    volatility_by_symbol = {
+        "MEMER/USDT": 0.03,
+        "CORRB": 0.04,
+        "CLEAN1": 0.05,
+        "CLEAN2": 0.06,
+    }
+    scored_candidates = [
+        {**candidate, "volatility": volatility_by_symbol[candidate["symbol"]]}
+        for candidate in accepted
+    ]
+
+    result = sizer.size_positions(
+        scored_candidates=scored_candidates,
+        equity=100_000.0,
+        open_positions=[],
+        config=config,
+    )
+    weights = {p["symbol"]: p["weight"] for p in result["positions"]}
+
+    # Top-3 by score among the gate's 4 accepted candidates: MEMER/USDT
+    # (0.95), CORRB (0.9), CLEAN1 (0.7). CLEAN2 (0.6) is 4th by score and
+    # is excluded entirely.
+    assert set(weights.keys()) == {"MEMER/USDT", "CORRB", "CLEAN1"}
+
+    # Worked arithmetic (04-05-PLAN.md <fixture>): raw = score/volatility,
+    # normalized to available_weight = 0.90 (open_positions=[]), single-
+    # position cap (0.50) not triggered, memecoin cap (0.10) clips
+    # MEMER/USDT's raw-normalized weight (~0.4181) down to exactly 0.10.
+    raw = {
+        "MEMER/USDT": 0.95 / 0.03,
+        "CORRB": 0.9 / 0.04,
+        "CLEAN1": 0.7 / 0.05,
+    }
+    raw_sum = sum(raw.values())
+    available_weight = 1.0 - config.SIZER_CASH_RESERVE
+    preliminary = {k: (v / raw_sum) * available_weight for k, v in raw.items()}
+
+    assert weights["MEMER/USDT"] == pytest.approx(config.SIZER_MEMECOIN_CAP, abs=1e-9)
+    assert weights["CORRB"] == pytest.approx(preliminary["CORRB"], rel=1e-3)
+    assert weights["CLEAN1"] == pytest.approx(preliminary["CLEAN1"], rel=1e-3)
+
+    # Freed weight (preliminary MEMER/USDT weight minus the 0.10 clip) flows
+    # to cash, never redistributed to CORRB/CLEAN1 (04-RESEARCH.md Q3/A6).
+    expected_cash = 1.0 - config.SIZER_MEMECOIN_CAP - preliminary["CORRB"] - preliminary["CLEAN1"]
+    assert result["cash_weight"] == pytest.approx(expected_cash, rel=1e-3)
+
+    total = sum(weights.values()) + result["cash_weight"]
+    assert total == pytest.approx(1.0, abs=1e-9)
