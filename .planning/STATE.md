@@ -10,9 +10,11 @@ See: .planning/PROJECT.md (updated 25 July 2026)
 ## Current Position
 
 Phase: 0 of 0–10 (Ground Truth)
-Plan: 6 of 6 built in Phase 1 (01-03 account checkpoint open: awaiting IR + IBKR confirmation from user)
-Status: Phase 1 verifying — exit criterion PASSED live (AAPL 11,495 bars since 1980; BTC/USDT 3,266 since 2017; DOGE classified memecoin end-to-end)
-Last activity: 2026-07-26 — Plan 01-06 complete (53/53 tests); phase verification running
+Plan: Phase 1 build complete (6/6); Phase 2 discussion next
+Status: Phase 1 human_needed (3 account items in 01-HUMAN-UAT.md); Phase 0 monitoring to 2026-08-09; advancing to Phase 2
+Last activity: 2026-07-26 — Phase 1 verified: 20/20 code must-haves, no gaps; trader-pxg repo inspected (empty, nothing to ingest)
+
+Progress: [██░░░░░░░░] 18%
 
 Progress: [█░░░░░░░░░] 9%
 
