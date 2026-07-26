@@ -11,9 +11,13 @@ date-independent `get_unresolved_orders`/`idempotency.find_unresolved_match`
 crash-recovery sequence entry_pipeline (05-06) uses (BLOCKER 1 consistency,
 T-05-13).
 
-Task 2 (rolling kill-condition auto-retire) and Task 3 (account-level
-breaker evaluation + heartbeat) are added on top of this Task 1 exit-
-evaluation core in later commits.
+This module also evaluates D-01's five live kill conditions every tick,
+auto-retiring any strategy_config that trips one (T-05-09 -- thresholds are
+read only from the frozen `config.LIVE_STRATEGY_CONFIGS`, never recomputed
+from live results).
+
+Task 3 (account-level breaker evaluation + heartbeat) is added on top of
+this in a later commit.
 """
 
 from __future__ import annotations
@@ -22,10 +26,11 @@ import argparse
 import sys
 from datetime import date, datetime, timezone
 
+from trader.backtest import metrics
 from trader.backtest.config import EXIT_PROFILE
 from trader.backtest.exits import ExitResult, PositionState, evaluate_exit, next_watermark
 from trader.backtest.fills import fee_for
-from trader.paper import alerts, broker_crypto_sim, calendar_, idempotency, ledger
+from trader.paper import alerts, broker_crypto_sim, calendar_, config, idempotency, ledger
 from trader.paper.broker_ibkr import IBKRBrokerAdapter
 
 # migrations/0003_backtest.sql's exit_reason CHECK <-> migrations/0005's
@@ -214,6 +219,68 @@ def _submit_exit(
     }
 
 
+# ---------------------------------------------------------------------------
+# Task 2: rolling kill-condition evaluation + auto-retire
+# ---------------------------------------------------------------------------
+
+
+def _retire(conn, strategy_id: str, reason: str, trigger_value, retired: list[dict]) -> None:
+    ledger.retire_strategy(conn, strategy_id, reason, trigger_value)
+    alerts.notify("error", f"{strategy_id} retired: {reason} (trigger={trigger_value})")
+    retired.append({"strategy_id": strategy_id, "reason": reason, "trigger_value": trigger_value})
+
+
+def evaluate_kill_conditions(conn) -> list[dict]:
+    """D-01's five live kill conditions, evaluated every tick. Thresholds
+    are read only from the frozen `config.LIVE_STRATEGY_CONFIGS` (T-05-09) --
+    never recomputed from live results. Retired strategy_configs are never
+    re-evaluated (their open positions stay exit-managed regardless)."""
+    retired: list[dict] = []
+    for cfg in config.LIVE_STRATEGY_CONFIGS:
+        if ledger.is_strategy_retired(conn, cfg.strategy_id):
+            continue
+
+        trades = ledger.get_recent_trades(conn, cfg.strategy_id, limit=30)
+        if len(trades) < 30:
+            # KILL-CONDITIONS.md's rolling-30-trade window is not yet full.
+            continue
+
+        pnls = [t["pnl"] for t in trades]  # DESC order (most recent first)
+
+        pf = metrics.profit_factor(pnls)
+        if pf is not None and pf < cfg.pf_floor:
+            _retire(conn, cfg.strategy_id, "profit_factor_floor", pf, retired)
+            continue
+
+        chronological_pnls = list(reversed(pnls))
+        equity_curve: list[float] = []
+        running = 0.0
+        for pnl in chronological_pnls:
+            running += pnl
+            equity_curve.append(running)
+        dd = metrics.max_drawdown(equity_curve)
+        if dd is not None and dd <= cfg.max_dd_kill:
+            _retire(conn, cfg.strategy_id, "max_drawdown", dd, retired)
+            continue
+
+        # Mirrors trader.risk.breakers.evaluate_breakers's exact
+        # reversed-iteration-until-non-negative logic -- intentional
+        # duplication (this counts per-strategy_config trades, not the
+        # account-level trade_pnls breakers.py consumes). pnls is already
+        # DESC (most-recent-first), so no further reversal is needed here.
+        consecutive_losses = 0
+        for pnl in pnls:
+            if pnl < 0:
+                consecutive_losses += 1
+            else:
+                break
+        if consecutive_losses >= cfg.consecutive_loss_kill:
+            _retire(conn, cfg.strategy_id, "consecutive_losses", consecutive_losses, retired)
+            continue
+
+    return retired
+
+
 def run_guardian_once(
     conn,
     ibkr_adapter,
@@ -268,6 +335,8 @@ def run_guardian_once(
         )
         if outcome is not None:
             exits.append(outcome)
+
+    evaluate_kill_conditions(conn)
 
     return {"exits": exits, "ticked": len(open_positions)}
 

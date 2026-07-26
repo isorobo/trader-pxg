@@ -324,6 +324,98 @@ def test_ibkr_leg_skipped_on_non_trading_day_crypto_still_processed(paper_conn, 
 
 
 # ---------------------------------------------------------------------------
+# Task 2 -- rolling kill-condition evaluation + auto-retire
+# ---------------------------------------------------------------------------
+
+
+def _insert_trade(conn, strategy_id: str, pnl: float, exit_ts: str, symbol: str = "AAPL") -> None:
+    conn.execute(
+        """
+        INSERT INTO paper_trades
+            (strategy_id, profile_name, symbol, venue, asset_class, entry_ts,
+             entry_price, exit_ts, exit_price, exit_reason, qty, fees,
+             slippage_cost, pnl, entry_order_ref, exit_order_ref)
+        VALUES (?, ?, ?, 'ibkr_paper', 'stock', '2026-01-01T09:30:00', 100.0,
+                ?, 100.0, 'stop', 10, 1.0, 0.5, ?, 'entry_ref', 'exit_ref')
+        """,
+        (strategy_id, strategy_id, symbol, exit_ts, pnl),
+    )
+    conn.commit()
+
+
+def test_profit_factor_floor_retires_strategy(paper_conn):
+    strategy_id = "momentum_stock"
+    for i in range(15):
+        _insert_trade(paper_conn, strategy_id, pnl=1.0, exit_ts=f"2026-01-{i + 1:02d}T09:30:00")
+    for i in range(15):
+        _insert_trade(paper_conn, strategy_id, pnl=-2.0, exit_ts=f"2026-02-{i + 1:02d}T09:30:00")
+
+    retired = guardian.evaluate_kill_conditions(paper_conn)
+
+    assert len(retired) == 1
+    assert retired[0]["strategy_id"] == strategy_id
+    assert retired[0]["reason"] == "profit_factor_floor"
+    assert ledger.is_strategy_retired(paper_conn, strategy_id) is True
+
+
+def test_max_drawdown_retires_strategy(paper_conn):
+    strategy_id = "momentum_stock"
+    for i in range(10):
+        _insert_trade(paper_conn, strategy_id, pnl=100.0, exit_ts=f"2026-01-{i + 1:02d}T09:30:00")
+    _insert_trade(paper_conn, strategy_id, pnl=-50.0, exit_ts="2026-01-11T09:30:00")
+    for i in range(19):
+        _insert_trade(paper_conn, strategy_id, pnl=50.0, exit_ts=f"2026-02-{i + 1:02d}T09:30:00")
+
+    retired = guardian.evaluate_kill_conditions(paper_conn)
+
+    assert len(retired) == 1
+    assert retired[0]["reason"] == "max_drawdown"
+
+
+def test_consecutive_losses_retires_strategy(paper_conn):
+    strategy_id = "momentum_stock"
+    for i in range(22):
+        _insert_trade(paper_conn, strategy_id, pnl=100.0, exit_ts=f"2026-01-{i + 1:02d}T09:30:00")
+    for i in range(8):
+        _insert_trade(paper_conn, strategy_id, pnl=-1.0, exit_ts=f"2026-02-{i + 1:02d}T09:30:00")
+
+    retired = guardian.evaluate_kill_conditions(paper_conn)
+
+    assert len(retired) == 1
+    assert retired[0]["reason"] == "consecutive_losses"
+    assert retired[0]["trigger_value"] == 8
+
+
+def test_fewer_than_thirty_trades_never_retires(paper_conn):
+    strategy_id = "momentum_stock"
+    for i in range(10):
+        _insert_trade(paper_conn, strategy_id, pnl=-100.0, exit_ts=f"2026-01-{i + 1:02d}T09:30:00")
+
+    retired = guardian.evaluate_kill_conditions(paper_conn)
+
+    assert retired == []
+    assert ledger.is_strategy_retired(paper_conn, strategy_id) is False
+
+
+def test_already_retired_strategy_never_re_evaluated_no_duplicate_alert(paper_conn, monkeypatch):
+    strategy_id = "momentum_stock"
+    for i in range(15):
+        _insert_trade(paper_conn, strategy_id, pnl=1.0, exit_ts=f"2026-01-{i + 1:02d}T09:30:00")
+    for i in range(15):
+        _insert_trade(paper_conn, strategy_id, pnl=-2.0, exit_ts=f"2026-02-{i + 1:02d}T09:30:00")
+
+    mock_notify = MagicMock(wraps=guardian.alerts.notify)
+    monkeypatch.setattr(guardian.alerts, "notify", mock_notify)
+
+    first = guardian.evaluate_kill_conditions(paper_conn)
+    second = guardian.evaluate_kill_conditions(paper_conn)
+
+    assert len(first) == 1
+    assert second == []
+    assert mock_notify.call_count == 1
+
+
+# ---------------------------------------------------------------------------
 # T-05-05 -- no resting STP/STP LMT order type anywhere in this file
 # ---------------------------------------------------------------------------
 
