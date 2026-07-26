@@ -1,5 +1,7 @@
 """Shared pytest fixtures for the ground_truth test suite."""
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from trader.ground_truth import db
@@ -57,6 +59,28 @@ def mock_finviz_rows():
         }
         for i in range(50)
     ]
+
+
+@pytest.fixture
+def fake_ib():
+    """A fake `ib_async.IB` client for trader.paper.broker_ibkr (05-03-PLAN.md).
+
+    A MagicMock so any method not explicitly configured below (e.g.
+    connect/disconnect/reqOpenOrders/reqMktData) is a harmless no-op call
+    recorder by default. positions()/openTrades()/fills() default to empty
+    lists; placeOrder() defaults to a fake Trade whose .order.orderRef and
+    .order.permId are settable per-test via
+    `fake_ib.placeOrder.return_value.order.orderRef = "..."` etc. Shared by
+    this plan's tests and every later plan (guardian, entry_pipeline,
+    reconciliation) that needs a fake broker -- never a real network/Gateway
+    connection.
+    """
+    client = MagicMock()
+    client.positions.return_value = []
+    client.openTrades.return_value = []
+    client.fills.return_value = []
+    client.placeOrder.return_value = MagicMock()
+    return client
 
 
 @pytest.fixture
