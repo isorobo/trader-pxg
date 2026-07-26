@@ -39,7 +39,7 @@ Plans:
 - [x] 00-02-PLAN.md — Snapshot schema (db.py) + stock/crypto source adapters (sources.py)
 - [x] 00-03-PLAN.md — Poll orchestration (poll.py) + Task Scheduler registration
 - [x] 00-04-PLAN.md — Daily report generator (report.py)
-- [ ] 00-05-PLAN.md — Live end-to-end verification + two-week monitoring checkpoint
+- [x] 00-05-PLAN.md — Live end-to-end verification + two-week monitoring checkpoint
 
 ### Phase 1: Accounts & Data Plumbing
 **Goal**: All access sorted before it is needed — brokers, exchanges, data, repo, database.
@@ -151,7 +151,7 @@ Phases execute in numeric order; Phase 0 runs continuously in the background, Ph
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 0. Ground Truth | 0/5 | Planned | - |
+| 0. Ground Truth | 5/5 | Monitoring (DATA-04 window to 2026-08-09) | - |
 | 1. Accounts & Data Plumbing | 0/TBD | Not started | - |
 | 2. Backtest Harness | 0/TBD | Not started | - |
 | 3. Strategy Lab | 0/TBD | Not started | - |
