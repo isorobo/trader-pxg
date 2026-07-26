@@ -433,10 +433,11 @@ ib.connect("127.0.0.1", PAPER_PORT, clientId=5)
 
 ## Open Questions
 
-1. **Does the weekly IBKR mobile 2FA approval count against the phase's "zero manual interventions" exit criterion?**
+1. (RESOLVED via BLOCKER 2 -- planner-revision pass) **Does the weekly IBKR mobile 2FA approval count against the phase's "zero manual interventions" exit criterion?**
    - What we know: The exit criterion (05-CONTEXT.md) says "two consecutive weeks unattended, zero manual interventions, zero unexplained state divergences," and IBKR paper accounts cannot avoid a weekly re-auth tap.
    - What's unclear: Whether the owner intends "manual intervention" to mean "any human action" (in which case the criterion is currently unachievable as literally worded) or "any human action taken to fix a problem" (in which case a scheduled, expected, logged weekly tap is not an intervention in the relevant sense).
    - Recommendation: Planner should make this an explicit, named exception in the phase plan's exit-criteria wording, logged via D-12's ops log with a distinct `scheduled_auth` action type separate from `manual_restart_required`, and confirm the reading with the owner before treating a two-week run as passed or failed on this technicality.
+   - Resolution (BLOCKER 2, planner-revision pass): trader/paper/ops_log.py now ships a CLI (`python -m trader.paper.ops_log --entry-type scheduled_auth --message "..."`) the owner runs after every weekly 2FA tap (Plan 05-02); Plan 05-09's runbook and Plan 05-07's daily-report Manual Interventions tally both treat scheduled_auth as pre-registered and distinct from manual_restart_required. The reading is: "any human action taken to fix a problem" counts; a logged, expected weekly tap does not.
 
 2. **Should Kraken's read-only wiring (D-04) participate in reconciliation at all, or purely as a balance sanity check with no effect on halts?**
    - What we know: D-04 says Kraken keys are wired "read-only for price/balance sanity only if present" and crypto never places real orders in Phase 5.
