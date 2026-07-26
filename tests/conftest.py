@@ -3,6 +3,7 @@
 import pytest
 
 from trader.ground_truth import db
+from trader.data import db as trader_db
 
 
 @pytest.fixture
@@ -15,6 +16,18 @@ def tmp_db_path(tmp_path):
 def conn(tmp_db_path):
     """A live connection to a fresh temp DB, closed after the test."""
     connection = db.get_connection(tmp_db_path)
+    yield connection
+    connection.close()
+
+
+@pytest.fixture
+def paper_conn(tmp_path):
+    """A live connection to a fresh temp DB via trader.data.db's migration
+    runner (applies every migration, including 0005_paper_trading.sql) --
+    parallel to the ground_truth `conn` fixture above, but using the
+    migration runner every Phase 1+ module shares, not trader.ground_truth.db.
+    """
+    connection = trader_db.get_connection(str(tmp_path / "trader.db"))
     yield connection
     connection.close()
 
