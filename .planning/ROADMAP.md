@@ -52,7 +52,7 @@ Plans:
 **Plans**: 6 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Foundation: pin ccxt/pandas, migrations runner, instruments/bars schema, cache helpers (ACCT-05, ACCT-06)
+- [x] 01-01-PLAN.md — Foundation: pin ccxt/pandas, migrations runner, instruments/bars schema, cache helpers (ACCT-05, ACCT-06)
 - [ ] 01-02-PLAN.md — CoinGecko asset classification (memecoin vs crypto_major heuristic)
 - [ ] 01-03-PLAN.md — Human checkpoint: IBKR, Kraken, Independent Reserve account applications (ACCT-01, ACCT-02, ACCT-03)
 - [ ] 01-04-PLAN.md — Stock daily bars fetcher (yfinance) with UTC-date normalization (ACCT-04)

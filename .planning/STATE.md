@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 25 July 2026)
 ## Current Position
 
 Phase: 0 of 0–10 (Ground Truth)
-Plan: 0 of 6 in Phase 1 (Phase 0 monitoring in background to 2026-08-09)
+Plan: 1 of 6 in Phase 1 (Phase 0 monitoring in background to 2026-08-09)
 Status: Phase 1 executing — wave 1 of 3
-Last activity: 2026-07-26 — Phase 1 planned (checker passed after 1 revision); execution started; user has begun IBKR + Kraken signups
+Last activity: 2026-07-26 — Plan 01-01 complete (migrations + instruments/bars schema, 29/29 tests); 01-03 account checkpoint next
 
 Progress: [█░░░░░░░░░] 9%
 
