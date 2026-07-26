@@ -219,6 +219,30 @@ def main(argv=None) -> None:
     out_path = os.path.join("reports", f"{parsed_date.isoformat()}.md")
     write_report_markdown(rows, coverage, out_path)
 
+    # Phase 5's paper-trading section (D-12, 05-07-PLAN.md) -- imported
+    # lazily here (never at module level) so this Phase 0 module never
+    # gains a hard Phase 5 import dependency for callers who only ever use
+    # Phase 0's ground-truth reporting. Wrapped in try/except: the
+    # ground-truth report must never fail to write because Phase 5's
+    # tables do not exist yet in an older DB, or because Phase 5 hasn't
+    # been executed yet in a fresh checkout (T-05-12).
+    try:
+        from trader.paper import daily_report as paper_daily_report
+
+        paper_conn = db.get_connection("data/trader.db")
+        try:
+            paper_section_lines = paper_daily_report.compute_paper_section(paper_conn)
+        finally:
+            paper_conn.close()
+        with open(out_path, "a", encoding="utf-8") as f:
+            f.write("\n".join(paper_section_lines) + "\n")
+    except Exception as error:
+        log.warning(
+            "Paper-trading report section failed (%s): %s",
+            type(error).__name__,
+            error,
+        )
+
     up_count = sum(1 for row in rows if (row["pct_return_same_day"] or 0) > 0)
     down_count = len(rows) - up_count if rows else 0
     print(f"Ground truth report written to {out_path}")
