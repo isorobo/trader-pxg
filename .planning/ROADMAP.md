@@ -69,9 +69,9 @@ Plans:
 **Plans**: 10 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Fee/slippage/EXIT_PROFILES config + backtest_runs/backtest_trades migration (BACK-02, BACK-03, BACK-04)
-- [ ] 02-02-PLAN.md — Point-in-time bar iterator, two-pointer cursors (BACK-01)
-- [ ] 02-03-PLAN.md — Metrics module with hand-computed golden fixture (BACK-06)
+- [x] 02-01-PLAN.md — Fee/slippage/EXIT_PROFILES config + backtest_runs/backtest_trades migration (BACK-02, BACK-03, BACK-04)
+- [x] 02-02-PLAN.md — Point-in-time bar iterator, two-pointer cursors (BACK-01)
+- [x] 02-03-PLAN.md — Metrics module with hand-computed golden fixture (BACK-06)
 - [ ] 02-04-PLAN.md — Fee and slippage fill mechanics (BACK-02, BACK-03)
 - [ ] 02-05-PLAN.md — Exit engine: D-10 order, entry-bar check, stop-wins-tie, trailing, eod_flat (BACK-04)
 - [ ] 02-06-PLAN.md — Trade ledger: one row per fill, reproducibility (BACK-05)

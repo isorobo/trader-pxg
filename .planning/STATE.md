@@ -48,7 +48,8 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-None yet.
+- Phase 3 discussion MUST read `Strategys/` (owner-curated strategy library, added 2026-07-26) as a canonical ref — includes the phase-doc strategies (Momentum, Breakout) plus candidates (Donchian, RSI-2, TS-momentum) for the Phase 7 pipeline. Phase doc precedence rules on any conflict.
+- Owner question pending: wire trader-pxg GitHub repo as remote? (currently public — recommend private first)
 
 ### Blockers/Concerns
 
