@@ -68,10 +68,15 @@ def _insert_trade(conn, **overrides):
 
 
 def test_migration_0003_reaches_schema_version_3(data_conn):
-    max_version = data_conn.execute(
-        "SELECT MAX(version) FROM schema_version"
-    ).fetchone()[0]
-    assert max_version == 3
+    # Assert version 3 was applied (not that it is the MAX) -- later
+    # migrations (e.g. 0004_risk_breakers.sql) apply on top of a fresh DB
+    # via the same apply_migrations() call, so MAX(version) grows over time
+    # as new migrations land; this test's contract is only that 0003 itself
+    # was applied cleanly.
+    applied_versions = {
+        row[0] for row in data_conn.execute("SELECT version FROM schema_version").fetchall()
+    }
+    assert 3 in applied_versions
 
 
 def test_migration_0003_creates_backtest_tables(data_conn):
