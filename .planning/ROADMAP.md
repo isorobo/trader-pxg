@@ -76,9 +76,9 @@ Plans:
 - [x] 02-05-PLAN.md — Exit engine: D-10 order, entry-bar check, stop-wins-tie, trailing, eod_flat (BACK-04)
 - [x] 02-06-PLAN.md — Trade ledger: one row per fill, reproducibility (BACK-05)
 - [x] 02-07-PLAN.md — Seeded random strategy + momentum placeholder strategy (BACK-07)
-- [ ] 02-08-PLAN.md — Runner: wires iterator+fills+exits+ledger, signal-to-fill lag (BACK-01, BACK-04, BACK-05)
-- [ ] 02-09-PLAN.md — Sanity universe backfill + permanent BACK-07 exit-gate test
-- [ ] 02-10-PLAN.md — End-to-end momentum placeholder run + metrics report (BACK-06)
+- [x] 02-08-PLAN.md — Runner: wires iterator+fills+exits+ledger, signal-to-fill lag (BACK-01, BACK-04, BACK-05)
+- [x] 02-09-PLAN.md — Sanity universe backfill + permanent BACK-07 exit-gate test
+- [x] 02-10-PLAN.md — End-to-end momentum placeholder run + metrics report (BACK-06)
 
 ### Phase 3: Strategy Lab
 **Goal**: Find configs worth paper trading; kill the rest cheaply.
