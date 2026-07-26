@@ -35,6 +35,8 @@ fixture grids only (tests/test_sweep_engine.py).
 
 from __future__ import annotations
 
+import pandas as pd
+
 from trader.backtest import exit_grid, frozen_config, ledger, metrics, runner
 
 # Reused by later plans/scripts that drive the real sweep (Plan 03-04) so
@@ -56,8 +58,6 @@ def _slice_bars(bars_by_symbol: dict, start: str | None, end: str) -> dict:
     Never mutates the input DataFrames -- `.loc[...]` on a boolean mask
     returns a new (view-backed) frame, not an in-place filter.
     """
-    import pandas as pd
-
     end_ts = pd.Timestamp(end, tz="UTC")
 
     sliced: dict = {}
