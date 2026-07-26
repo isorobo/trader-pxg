@@ -103,7 +103,7 @@ def _fixture_candidate(strategy_fn):
             "stop_pct": -0.10,
             "tp_pct": 0.20,
             "trailing_pct": None,
-            "max_hold_days": 10,
+            "max_hold_days": 3,
         },
         "strategy_fn": strategy_fn,
     }

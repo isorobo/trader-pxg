@@ -31,13 +31,35 @@ module adds on top is:
 Plan 03-04 drives this module against the real 270/360-cell grid and the
 real frozen universe; this module is proven correct here against tiny
 fixture grids only (tests/test_sweep_engine.py).
+
+5. `run_oos_validation` (Plan 03-05, STRAT-05): validates every D-10 top-5
+   candidate against its regime's held-out OOS window only -- the same
+   `frozen_config.verify_frozen()` gate and the same `_slice_bars` helper
+   as `run_tune_sweep`, but bounded to `[regime.oos_start, regime.oos_end]`
+   instead of the tune window. Unlike `run_tune_sweep`, this function DOES
+   import `regimes.py` directly (see the interface note in
+   03-05-PLAN.md) to look candidates' regimes up by `(bucket, label)`,
+   since a candidate dict only carries the regime's label, not the frozen
+   window itself.
+6. `determine_survivor` (D-09/T-03-15): the ONLY code path that turns OOS
+   metrics into a verdict. A candidate below the minimum-trade floor is
+   always "insufficient_sample" regardless of how good its profit_factor
+   looks -- the same thin-lucky-window guard `select_top5` already applies
+   at the tune stage, now applied again at the OOS stage (Common Pitfall 3).
+
+Plan 03-05 drives `run_oos_validation` against the real 15 tune-sweep
+candidates and the real frozen regime windows; this module is proven
+correct here against tiny fixture regimes/candidates only
+(tests/test_oos_validation.py).
 """
 
 from __future__ import annotations
 
+import math
+
 import pandas as pd
 
-from trader.backtest import exit_grid, frozen_config, ledger, metrics, runner
+from trader.backtest import config, exit_grid, frozen_config, ledger, metrics, regimes, runner, universe
 
 # Reused by later plans/scripts that drive the real sweep (Plan 03-04) so
 # every script shares one literal sweep_id rather than re-deriving it.
@@ -168,3 +190,111 @@ def select_top5(cell_results: list[dict], min_trades: int = 30) -> list[dict]:
         reverse=True,
     )
     return eligible[:5]
+
+
+def run_oos_validation(
+    candidates: list[dict],
+    bars_by_symbol_by_bucket: dict[str, dict],
+    conn,
+    sweep_id: str,
+    seed: int = 20260726,
+) -> list[dict]:
+    """Validate every D-10 top-5 candidate against its regime's held-out OOS
+    window and return one result dict per candidate.
+
+    Each returned dict is `{"candidate": dict, "oos_run_id": int,
+    "oos_metrics": dict}` -- `oos_metrics` is `compute_metrics`'s output over
+    that candidate's OOS trades (post-fees/slippage, the same honest basis
+    `run_tune_sweep`'s cells are ranked on).
+
+    `frozen_config.verify_frozen()` is called FIRST, before any regime
+    lookup, EXIT_PROFILE reconstruction, or run_backtest call
+    (T-03-14) -- its RuntimeError propagates uncaught on a hash mismatch,
+    guaranteeing zero `run_backtest` calls and zero DB writes for a
+    tampered config, exactly mirroring `run_tune_sweep`'s gate placement.
+
+    `candidates` is `reports/backtests/tune_top5.json`'s real schema (Plan
+    03-04) plus one caller-injected key: `strategy_fn`, the actual
+    pick_entries callable for that candidate's base strategy. This module
+    holds no strategy-name registry of its own -- the caller script
+    (`run_oos_validation_all.py`) resolves `strategy_fn` from
+    `candidate["strategy_id"]` before calling this function.
+
+    `bars_by_symbol_by_bucket` maps each candidate's `bucket` to that
+    bucket's full (unsliced) `bars_by_symbol` dict -- this function slices
+    to `[regime.oos_start, regime.oos_end]` itself via `_slice_bars`, the
+    same helper `run_tune_sweep` uses for its own tune-window slice.
+
+    Unlike `run_tune_sweep` (which never imports `regimes.py` directly so
+    tests can hand it a lightweight stand-in), this function DOES look each
+    candidate's regime up from `regimes.REGIMES` by `(bucket, label)` --
+    a candidate dict only carries the regime's label string, not the frozen
+    window itself, so there is no other way to recover `oos_start`/
+    `oos_end`.
+    """
+    frozen_config.verify_frozen()
+
+    results: list[dict] = []
+    for candidate in candidates:
+        bucket = candidate["bucket"]
+        regime_label = candidate["regime"]
+        regime = next(
+            r for r in regimes.REGIMES if r.bucket == bucket and r.label == regime_label
+        )
+
+        params = candidate["params"]
+        profile = config.EXIT_PROFILE(
+            stop_pct=params["stop_pct"],
+            tp_pct=params["tp_pct"],
+            scale_out=(),
+            trailing_pct=params["trailing_pct"],
+            max_hold_days=params["max_hold_days"],
+            eod_flat=False,
+        )
+
+        sliced_bars = _slice_bars(
+            bars_by_symbol_by_bucket[bucket], regime.oos_start, regime.oos_end
+        )
+
+        run_id = runner.run_backtest(
+            candidate["strategy_fn"],
+            universe.UNIVERSE_BY_BUCKET[bucket],
+            profile,
+            sliced_bars,
+            seed,
+            params={**params, "split": "oos", "sweep_id": sweep_id},
+            strategy_id=candidate["strategy_id"],
+            conn=conn,
+        )
+
+        trades = ledger.get_trades_for_run(conn, run_id)
+        oos_metrics = metrics.compute_metrics(trades)
+        results.append(
+            {"candidate": candidate, "oos_run_id": run_id, "oos_metrics": oos_metrics}
+        )
+
+    return results
+
+
+def determine_survivor(oos_metrics: dict, min_trades: int = 15) -> str:
+    """D-09's OOS verdict rule (T-03-15): the ONLY code path that turns a
+    candidate's OOS metrics into a survivor/insufficient_sample/killed
+    verdict.
+
+    Returns "insufficient_sample" when `oos_metrics["trade_count"]` is below
+    `min_trades` (15, D-09's OOS floor), REGARDLESS of `profit_factor` --
+    Common Pitfall 3's guard: a synthetic 4-trade OOS window with a very
+    high profit_factor still returns "insufficient_sample", never
+    "survivor". A thin lucky window can never be reported as a survivor.
+
+    Otherwise returns "survivor" when `profit_factor` is `math.inf` (zero
+    losing trades) or strictly greater than 1.0 (post-cost profitability,
+    since `compute_metrics` already reflects fees/slippage), else "killed".
+    """
+    if oos_metrics["trade_count"] < min_trades:
+        return "insufficient_sample"
+
+    profit_factor = oos_metrics["profit_factor"]
+    if profit_factor is math.inf or (profit_factor or 0) > 1.0:
+        return "survivor"
+    return "killed"
