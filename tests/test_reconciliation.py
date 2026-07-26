@@ -531,29 +531,37 @@ def test_clear_halt_module_is_sole_writer_of_action_clear():
 
 
 def test_clear_halt_cli_end_to_end_clears_halt_and_logs_intervention(
-    paper_conn, tmp_path, monkeypatch
+    paper_conn, tmp_path
 ):
+    """main()'s CLI shape is --reason/--db-path only (identical to
+    clear_breaker.py's CLI) -- it never exposes --log-path, so it always
+    calls ops_log.append_ops_log through clear_entry_halt's default
+    parameter. trader.paper.ops_log caches one logger per log_path string
+    at module scope (tests/test_alerts.py's own convention already relies
+    on this), so this test asserts the ops-log call was made with the
+    right args via a mock rather than reading a real file -- avoiding any
+    cross-test file-handle collision on the shared default relative path.
+    """
+    from unittest.mock import patch
+
     from trader.data import db
-    from trader.paper import clear_halt, ops_log, reconcile
+    from trader.paper import clear_halt, reconcile
 
     db_path = str(tmp_path / "trader.db")
     conn = db.get_connection(db_path)
     reconcile.record_reconciliation(conn, "AAPL", "ibkr_paper", 0, 10, "unexplained")
     conn.close()
 
-    monkeypatch.chdir(tmp_path)
-    clear_halt.main(["--reason", "verified in Gateway", "--db-path", db_path])
+    with patch("trader.paper.ops_log.append_ops_log") as mock_append:
+        clear_halt.main(["--reason", "verified in Gateway", "--db-path", db_path])
+
+    mock_append.assert_called_once_with(
+        "manual_restart_required", "verified in Gateway", clear_halt._DEFAULT_LOG_PATH
+    )
 
     conn = db.get_connection(db_path)
     assert reconcile.is_entry_halted(conn) is False
     conn.close()
-
-    log_path = tmp_path / ops_log._DEFAULT_LOG_PATH
-    lines = [
-        line for line in open(log_path, encoding="utf-8").read().splitlines() if line
-    ]
-    assert len(lines) == 1
-    assert "manual_restart_required" in lines[0]
 
 
 def test_clear_halt_cli_requires_reason_argument(tmp_path):
