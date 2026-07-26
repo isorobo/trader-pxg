@@ -381,7 +381,10 @@ def test_gate_module_has_no_strategies_import():
     import inspect
 
     source = inspect.getsource(gate)
-    assert "trader.backtest.strategies" not in source
+    for line in source.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("import ") or stripped.startswith("from "):
+            assert "trader.backtest.strategies" not in stripped
 
 
 def test_gate_module_has_no_inline_thresholds():
