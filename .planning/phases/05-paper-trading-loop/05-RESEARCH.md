@@ -431,7 +431,7 @@ ib.connect("127.0.0.1", PAPER_PORT, clientId=5)
 | A4 | `pandas-market-calendars` is the right weight/complexity tradeoff over a hand-rolled holiday list | Standard Stack, Alternatives Considered | If the owner prefers zero new dependencies over correctness on early-close days, a lightweight hardcoded list is a legitimate fallback — flagged for planner/owner confirmation, not unilaterally decided here |
 | A5 | IBKR's weekly credential reset timing (~01:00 ET Sunday) maps to a specific NZ wall-clock window that the owner can reliably be awake for | Pitfall 1 | Timing math (ET to NZT offset, which shifts with each hemisphere's independent DST calendar) was not independently re-verified this session against a live calendar tool; if wrong, the "one weekly tap" could land at an inconvenient NZ hour, which is an ops-scheduling problem for the owner, not a code risk |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. (RESOLVED via BLOCKER 2 -- planner-revision pass) **Does the weekly IBKR mobile 2FA approval count against the phase's "zero manual interventions" exit criterion?**
    - What we know: The exit criterion (05-CONTEXT.md) says "two consecutive weeks unattended, zero manual interventions, zero unexplained state divergences," and IBKR paper accounts cannot avoid a weekly re-auth tap.
@@ -439,10 +439,11 @@ ib.connect("127.0.0.1", PAPER_PORT, clientId=5)
    - Recommendation: Planner should make this an explicit, named exception in the phase plan's exit-criteria wording, logged via D-12's ops log with a distinct `scheduled_auth` action type separate from `manual_restart_required`, and confirm the reading with the owner before treating a two-week run as passed or failed on this technicality.
    - Resolution (BLOCKER 2, planner-revision pass): trader/paper/ops_log.py now ships a CLI (`python -m trader.paper.ops_log --entry-type scheduled_auth --message "..."`) the owner runs after every weekly 2FA tap (Plan 05-02); Plan 05-09's runbook and Plan 05-07's daily-report Manual Interventions tally both treat scheduled_auth as pre-registered and distinct from manual_restart_required. The reading is: "any human action taken to fix a problem" counts; a logged, expected weekly tap does not.
 
-2. **Should Kraken's read-only wiring (D-04) participate in reconciliation at all, or purely as a balance sanity check with no effect on halts?**
+2. (RESOLVED -- planner-revision pass) **Should Kraken's read-only wiring (D-04) participate in reconciliation at all, or purely as a balance sanity check with no effect on halts?**
    - What we know: D-04 says Kraken keys are wired "read-only for price/balance sanity only if present" and crypto never places real orders in Phase 5.
    - What's unclear: Whether a Kraken balance mismatch (e.g., the owner manually moves funds) should ever trigger the same halt-and-alert path as an IBKR divergence, or whether it is purely informational.
    - Recommendation: Default to informational-only (log to `reconciliation_log` with a `venue="kraken_readonly"` tag, never trigger a breaker), since D-04 explicitly scopes Kraken out of order-affecting logic this phase; confirm with the owner if this default is wrong.
+   - Resolution (planner-revision pass): Plan 05-04's reconcile.py implements exactly this default -- Kraken read-only checks are recorded with venue='kraken_readonly', classification='informational', action='log' ALWAYS, never 'halt'. This is now committed code, not an open design fork; confirm with the owner only if the actual live behavior needs to differ.
 
 ## Environment Availability
 
