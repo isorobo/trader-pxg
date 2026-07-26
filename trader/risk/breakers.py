@@ -88,3 +88,131 @@ def evaluate_breakers(
         "consecutive_loss_tripped": consecutive_loss_tripped,
         "consecutive_loss_count": consecutive_loss_count,
     }
+
+
+def append_breaker_event(
+    conn,
+    breaker_type: str,
+    action: str,
+    trigger_value: float | None = None,
+    reason: str | None = None,
+    actor: str = "system",
+) -> None:
+    """Insert exactly one row into ``breaker_events`` via a single
+    parameterized statement (ASVS V5, mirrors ``trader/data/db.py``'s
+    ``INSERT`` convention exactly) -- a SQL-injection-shaped ``reason``
+    string is stored literally, never executed."""
+    conn.execute(
+        """
+        INSERT INTO breaker_events (breaker_type, action, trigger_value, reason, actor)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (breaker_type, action, trigger_value, reason, actor),
+    )
+    conn.commit()
+
+
+def read_breaker_state(conn) -> dict:
+    """Return all three breaker_types every time, re-derived from
+    ``breaker_state_current`` -- any breaker_type with zero events defaults
+    to ``{"current_action": "normal", "since": None, "reason": None}``."""
+    state = {
+        breaker_type: {"current_action": "normal", "since": None, "reason": None}
+        for breaker_type in _BREAKER_TYPES
+    }
+    rows = conn.execute(
+        "SELECT breaker_type, current_action, since, reason FROM breaker_state_current"
+    ).fetchall()
+    for breaker_type, current_action, since, reason in rows:
+        state[breaker_type] = {
+            "current_action": current_action,
+            "since": since,
+            "reason": reason,
+        }
+    return state
+
+
+def _record_auto_clearing_breaker(
+    conn, previous_state: dict, breaker_type: str, tripped: bool, trigger_value
+) -> None:
+    """Shared trip/reset transition logic for the two breakers that DO
+    auto-clear (daily_loss, consecutive_loss). Drawdown is handled
+    separately in ``record_breaker_transitions`` and never calls this
+    helper, since it must never auto-clear (see module docstring)."""
+    was_tripped = previous_state[breaker_type]["current_action"] == "trip"
+    if not was_tripped and tripped:
+        append_breaker_event(
+            conn,
+            breaker_type,
+            "trip",
+            trigger_value=trigger_value,
+            reason=f"{breaker_type} threshold breached",
+            actor="system",
+        )
+    elif was_tripped and not tripped:
+        append_breaker_event(
+            conn,
+            breaker_type,
+            "reset",
+            trigger_value=trigger_value,
+            reason=f"{breaker_type} condition cleared",
+            actor="system",
+        )
+
+
+def record_breaker_transitions(conn, previous_state: dict, evaluation: dict) -> None:
+    """Append only the transitions a fresh ``evaluate_breakers()`` call can
+    justify (standing rule 4) -- never silently drops a real transition.
+
+    ``daily_loss`` and ``consecutive_loss``: append ``"trip"`` on
+    normal->tripped, ``"reset"`` on tripped->normal, nothing on no change.
+
+    ``drawdown``: append ``"trip"`` on normal->tripped ONLY. By
+    construction, no branch in this function ever appends a reset (or any
+    other clearing action) for drawdown -- see the module docstring's
+    human-only clear-path guarantee.
+    """
+    _record_auto_clearing_breaker(
+        conn,
+        previous_state,
+        breaker_type="daily_loss",
+        tripped=evaluation["daily_loss_tripped"],
+        trigger_value=evaluation["daily_loss_value"],
+    )
+    _record_auto_clearing_breaker(
+        conn,
+        previous_state,
+        breaker_type="consecutive_loss",
+        tripped=evaluation["consecutive_loss_tripped"],
+        trigger_value=evaluation["consecutive_loss_count"],
+    )
+
+    was_tripped = previous_state["drawdown"]["current_action"] == "trip"
+    if not was_tripped and evaluation["drawdown_tripped"]:
+        append_breaker_event(
+            conn,
+            "drawdown",
+            "trip",
+            trigger_value=evaluation["drawdown_value"],
+            reason="drawdown threshold breached",
+            actor="system",
+        )
+    # No branch here ever appends a reset (or any other clearing action)
+    # for drawdown -- that would defeat the human-only clear-path guarantee.
+
+
+def clear_manual_restart(conn, reason: str) -> None:
+    """The ONLY function permitted to clear the drawdown breaker's halt.
+
+    This is the sole clear path for the drawdown breaker's tripped state in
+    the entire codebase (security requirement, T-04-10) -- no other code
+    path in this module ever appends a ``manual_restart`` action. Invoked
+    exclusively as an explicit human-run command via
+    ``python -m trader.risk.clear_breaker --reason "<why>"``
+    (``trader/risk/clear_breaker.py``); never called from
+    ``evaluate_breakers``, ``record_breaker_transitions``, or any other
+    automated path.
+    """
+    append_breaker_event(
+        conn, "drawdown", "manual_restart", reason=reason, actor="human"
+    )

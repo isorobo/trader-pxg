@@ -375,13 +375,31 @@ def test_record_transitions_never_auto_resets_drawdown(data_conn):
 # ---------------------------------------------------------------------------
 
 
-def test_no_fstring_or_percent_format_sql_in_breakers_module():
-    """Every SQL statement in breakers.py must use parameterized
-    placeholders (ASVS V5) -- zero f-string/.format()-interpolated SQL."""
+def test_every_conn_execute_call_uses_a_parameterized_query_string():
+    """Every conn.execute(...)/executemany(...) call in breakers.py must
+    pass a plain string literal as its SQL argument (ASVS V5) -- an
+    f-string or .format()-built query would defeat parameterization. This
+    does not ban f-strings elsewhere in the module (e.g. building a human-
+    readable `reason` value is fine -- only the SQL argument itself is
+    constrained)."""
     source = BREAKERS_SOURCE_PATH.read_text(encoding="utf-8")
-    assert 'f"' not in source
-    assert "f'" not in source
-    assert ".format(" not in source
+    tree = ast.parse(source)
+
+    execute_calls = 0
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in ("execute", "executemany")
+            and node.args
+        ):
+            execute_calls += 1
+            sql_arg = node.args[0]
+            assert isinstance(sql_arg, ast.Constant) and isinstance(sql_arg.value, str), (
+                "conn.execute()'s SQL argument must be a plain string literal, "
+                f"not {ast.dump(sql_arg)}"
+            )
+    assert execute_calls > 0, "expected at least one conn.execute() call in breakers.py"
 
 
 def test_manual_restart_literal_confined_to_clear_manual_restart():
