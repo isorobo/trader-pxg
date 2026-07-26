@@ -1,4 +1,4 @@
-"""Trade ledger for the backtest harness (BACK-05, D-11, D-12).
+"""Trade ledger for the backtest harness (BACK-05, BACK-06, D-11, D-12).
 
 Parameterized writes to ``backtest_runs``/``backtest_trades`` (migrations/
 0003_backtest.sql, plan 02-01), one row per fill event — a position that
@@ -9,6 +9,13 @@ Per-position totals derive by ``SUM(pnl) ... GROUP BY position_id``.
 Reproducibility (D-12): running the same seed + params against the same
 data twice must produce identical trade content (excluding the
 autoincrement/timestamp storage artifacts run_id/trade_id/started_at).
+
+Per-strategy attribution (BACK-06): ``get_trades_for_strategy`` and
+``compute_metrics_by_strategy`` group fills by strategy_id across every
+run that strategy has ever produced. ``compute_metrics_by_strategy`` is a
+thin wrapper that reuses ``trader.backtest.metrics.compute_metrics``
+verbatim per strategy_id group — it does not reimplement any metric
+formula.
 """
 
 from __future__ import annotations
@@ -16,6 +23,8 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
+
+from trader.backtest import metrics
 
 
 def _code_version() -> str:
@@ -129,3 +138,56 @@ def get_trades_for_run(conn: sqlite3.Connection, run_id: int) -> list[dict]:
         (run_id,),
     )
     return _rows_to_dicts(cursor)
+
+
+def get_trades_for_strategy(conn: sqlite3.Connection, strategy_id: str) -> list[dict]:
+    """Return every backtest_trades row for one strategy_id ACROSS ALL
+    run_ids, ordered by trade_id ascending — the cross-run query
+    get_trades_for_run deliberately does not provide."""
+    cursor = conn.cursor()
+    cursor.row_factory = sqlite3.Row
+    cursor.execute(
+        "SELECT * FROM backtest_trades WHERE strategy_id = ? ORDER BY trade_id ASC",
+        (strategy_id,),
+    )
+    return _rows_to_dicts(cursor)
+
+
+def compute_metrics_by_strategy(
+    conn: sqlite3.Connection, run_ids: list[int] | None = None
+) -> dict[str, dict]:
+    """Group trades by strategy_id and compute metrics for each group via
+    trader.backtest.metrics.compute_metrics. A thin grouping wrapper only —
+    it reuses compute_metrics rather than reimplementing any formula.
+
+    When run_ids is None, discovers every distinct strategy_id present in
+    backtest_runs and uses each strategy's full trade history. When run_ids
+    is given, scopes discovery and each strategy's trades to only those
+    run_ids rather than that strategy's full history.
+    """
+    if run_ids is None:
+        strategy_rows = conn.execute(
+            "SELECT DISTINCT strategy_id FROM backtest_runs"
+        ).fetchall()
+        strategy_ids = [row[0] for row in strategy_rows]
+
+        result: dict[str, dict] = {}
+        for strategy_id in strategy_ids:
+            trades = get_trades_for_strategy(conn, strategy_id)
+            result[strategy_id] = metrics.compute_metrics(trades)
+        return result
+
+    placeholders = ",".join("?" for _ in run_ids)
+    strategy_rows = conn.execute(
+        f"SELECT DISTINCT strategy_id FROM backtest_runs WHERE run_id IN ({placeholders})",
+        run_ids,
+    ).fetchall()
+    strategy_ids = [row[0] for row in strategy_rows]
+
+    run_id_set = set(run_ids)
+    result = {}
+    for strategy_id in strategy_ids:
+        all_trades = get_trades_for_strategy(conn, strategy_id)
+        scoped_trades = [t for t in all_trades if t["run_id"] in run_id_set]
+        result[strategy_id] = metrics.compute_metrics(scoped_trades)
+    return result
