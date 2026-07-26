@@ -91,12 +91,12 @@ Plans:
 **Plans**: 6 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Momentum (RSI+volume surge) and breakout (NR7+20-day high, no-retest) agents as pure functions (STRAT-01, STRAT-02)
-- [ ] 03-02-PLAN.md — Frozen universe/regime/exit-grid config, hash-based freeze gate, one-time live universe backfill (STRAT-03, STRAT-04, STRAT-05)
-- [ ] 03-03-PLAN.md — Sweep engine: grid iteration, provenance tagging, frozen-config hash gate, D-10 top-5 selection with min-trade floor (STRAT-03)
-- [ ] 03-04-PLAN.md — Real tune-sweep execution across both strategies, all 3 buckets, all 6 regimes (STRAT-03, STRAT-04, STRAT-05)
-- [ ] 03-05-PLAN.md — OOS validation engine + real run against every top-5 candidate's held-out window (STRAT-04, STRAT-05)
-- [ ] 03-06-PLAN.md — Sweep reports (tune vs OOS, per-symbol P&L) + KILL-CONDITIONS.md phase-exit gate (STRAT-06)
+- [x] 03-01-PLAN.md — Momentum (RSI+volume surge) and breakout (NR7+20-day high, no-retest) agents as pure functions (STRAT-01, STRAT-02)
+- [x] 03-02-PLAN.md — Frozen universe/regime/exit-grid config, hash-based freeze gate, one-time live universe backfill (STRAT-03, STRAT-04, STRAT-05)
+- [x] 03-03-PLAN.md — Sweep engine: grid iteration, provenance tagging, frozen-config hash gate, D-10 top-5 selection with min-trade floor (STRAT-03)
+- [x] 03-04-PLAN.md — Real tune-sweep execution across both strategies, all 3 buckets, all 6 regimes (STRAT-03, STRAT-04, STRAT-05)
+- [x] 03-05-PLAN.md — OOS validation engine + real run against every top-5 candidate's held-out window (STRAT-04, STRAT-05)
+- [x] 03-06-PLAN.md — Sweep reports (tune vs OOS, per-symbol P&L) + KILL-CONDITIONS.md phase-exit gate (STRAT-06)
 
 ### Phase 4: Risk Gate & Sizer
 **Goal**: The safety layer, built before anything can trade.
