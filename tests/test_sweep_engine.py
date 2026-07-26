@@ -13,6 +13,7 @@ correctness against small deterministic fixtures rather than real data.
 from __future__ import annotations
 
 import json
+import math
 
 import pandas as pd
 import pytest
@@ -231,3 +232,80 @@ def test_slice_bars_none_start_uses_symbols_own_first_row():
     for symbol, df in sliced.items():
         assert df.index.min() == bars[symbol].index[0]
         assert df.index.max() <= pd.Timestamp("2023-01-10", tz="UTC")
+
+
+# --- Task 2: select_top5 -----------------------------------------------------
+
+
+def _cell(trade_count, profit_factor):
+    return {
+        "run_id": 0,
+        "params": {},
+        "metrics": {"trade_count": trade_count, "profit_factor": profit_factor},
+    }
+
+
+def test_select_top5_excludes_cells_below_the_min_trade_floor():
+    results = [
+        _cell(50, 5.0),
+        _cell(10, 100.0),  # high profit_factor but below the floor -- excluded
+        _cell(29, 50.0),  # one below the floor -- excluded
+        _cell(5, 1000.0),  # far below the floor -- excluded
+        _cell(40, 3.0),
+        _cell(35, 8.0),
+        _cell(60, 1.5),
+        _cell(30, 2.0),  # exactly at the floor -- eligible
+    ]
+
+    top5 = sweep.select_top5(results)
+
+    assert len(top5) == 5
+    for cell in top5:
+        assert cell["metrics"]["trade_count"] >= 30
+    assert all(cell["metrics"]["profit_factor"] != 100.0 for cell in top5)
+    assert all(cell["metrics"]["profit_factor"] != 1000.0 for cell in top5)
+    assert all(cell["metrics"]["profit_factor"] != 50.0 for cell in top5)
+
+
+def test_select_top5_ranks_descending_by_profit_factor_among_eligible():
+    results = [
+        _cell(50, 5.0),
+        _cell(40, 3.0),
+        _cell(35, 8.0),
+        _cell(60, 1.5),
+        _cell(30, 2.0),
+    ]
+
+    top5 = sweep.select_top5(results)
+
+    profit_factors = [cell["metrics"]["profit_factor"] for cell in top5]
+    assert profit_factors == sorted(profit_factors, reverse=True)
+    assert profit_factors[0] == 8.0
+
+
+def test_select_top5_ranks_inf_profit_factor_above_all_finite_values():
+    results = [
+        _cell(30, 2.0),
+        _cell(30, math.inf),  # zero losing trades
+        _cell(30, 9.0),
+    ]
+
+    top5 = sweep.select_top5(results)
+
+    assert top5[0]["metrics"]["profit_factor"] == math.inf
+
+
+def test_select_top5_returns_fewer_than_5_without_padding_when_only_some_eligible():
+    results = [_cell(50, 5.0), _cell(10, 100.0), _cell(40, 3.0)]
+
+    top5 = sweep.select_top5(results)
+
+    assert len(top5) == 2
+    assert top5[0]["metrics"]["profit_factor"] == 5.0
+    assert top5[1]["metrics"]["profit_factor"] == 3.0
+
+
+def test_select_top5_returns_empty_list_when_zero_cells_meet_the_floor():
+    results = [_cell(5, 10.0), _cell(29, 20.0)]
+
+    assert sweep.select_top5(results) == []
