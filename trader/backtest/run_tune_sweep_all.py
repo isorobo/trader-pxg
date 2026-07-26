@@ -48,6 +48,7 @@ from pathlib import Path
 
 from trader.backtest import exit_grid, regimes, sweep, universe
 from trader.backtest.strategies import breakout, momentum
+from trader.data import db as data_db
 from trader.data.api import get_daily_bars
 
 OUTPUT_PATH = Path("reports/backtests/tune_top5.json")
@@ -65,17 +66,24 @@ def main(conn=None, grid_fn=None) -> Path:
     """Run the full D-06/D-10 tune sweep and write
     reports/backtests/tune_top5.json.
 
-    conn: an existing sqlite3.Connection, or None to route every
-        get_daily_bars/run_backtest call to the real shared data/trader.db
-        (trader.data.db.get_connection's default path) -- matches
+    conn: an existing sqlite3.Connection, or None to resolve one real
+        connection to the shared data/trader.db up front
+        (trader.data.db.get_connection's default path) and reuse it for
+        every get_daily_bars/run_backtest call this run makes -- matches
         backfill_universe.py's precedent for this phase's real acceptance
-        runs.
+        runs. (get_daily_bars alone tolerates conn=None by opening its own
+        connection per call, but runner.run_backtest/ledger.record_run
+        require a real connection object, so this function must resolve
+        one itself rather than passing None straight through.)
     grid_fn: TEST-ONLY. See module docstring -- defaults to the real frozen
         exit_grid.exit_profile_grid; production callers must never pass
         anything else.
 
     Returns the Path the candidate JSON was written to.
     """
+    if conn is None:
+        conn = data_db.get_connection()
+
     original_grid_fn = exit_grid.exit_profile_grid
     active_grid_fn = grid_fn if grid_fn is not None else original_grid_fn
 
