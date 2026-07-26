@@ -47,12 +47,12 @@ created: 2026-07-26
 | 03-02-T3 | 03-02 | 1 | STRAT-04, STRAT-05 | T-03-05 | One-time live backfill of 25 universe symbols; RuntimeError on any zero-row symbol | integration (live, exempt from fast loop) | `python -m trader.backtest.backfill_universe` | new (Wave 1) | planned |
 | 03-03-T1 | 03-03 | 2 | STRAT-03 | T-03-08, T-03-09, T-03-10 | Hash gate blocks every cell before any DB write on tamper; every cell's params_json carries full provenance; every cell runs through unmodified run_backtest | unit | `python -m pytest tests/test_sweep_engine.py -k "tune or hash" -q -x` | new (Wave 2) | planned |
 | 03-03-T2 | 03-03 | 2 | STRAT-03 | T-03-11 | select_top5 enforces the >=30-trade floor before ranking; never returns more than 5 | unit | `python -m pytest tests/test_sweep_engine.py -k select_top5 -q -x` | new (Wave 2) | planned |
-| 03-04-T1 | 03-04 | 3 | STRAT-03, STRAT-04, STRAT-05 | T-03-13 | run_tune_sweep_all.py fast-fixture smoke: schema-valid tune_top5.json, <=60 entries | unit (fast fixture) | `python -m pytest tests/test_run_tune_sweep_all.py -q -x` | new (Wave 3) | planned |
+| 03-04-T1 | 03-04 | 3 | STRAT-03, STRAT-04, STRAT-05 | T-03-13 | run_tune_sweep_all.py fast-fixture smoke: schema-valid tune_top5.json, <=60 entries, strategy_id tagged as exact f"{strategy_id}_{bucket}" composite | unit (fast fixture) | `python -m pytest tests/test_run_tune_sweep_all.py -q -x` | new (Wave 3) | planned |
 | 03-04-T2 | 03-04 | 3 | STRAT-03, STRAT-04, STRAT-05 | T-03-12 | Real tune sweep executes across all 12 strategy/bucket/regime combos; exact expected backtest_runs row-count delta (3600) verified | integration (real, offline, ~16-30 min, per-plan acceptance) | `python -m trader.backtest.run_tune_sweep_all` | new (Wave 3) | planned |
-| 03-05-T1 | 03-05 | 4 | STRAT-05 | T-03-14, T-03-15 | OOS bars restricted to regime.oos_start/oos_end only; determine_survivor's 3-way branch (survivor/insufficient_sample/killed) with the 15-trade floor | unit | `python -m pytest tests/test_oos_validation.py -q -x` | new (Wave 4) | planned |
+| 03-05-T1 | 03-05 | 4 | STRAT-05 | T-03-14, T-03-15 | frozen_config.verify_frozen() called first in run_oos_validation, before any regime lookup or run_backtest call — tampered hash raises RuntimeError with ZERO run_backtest calls (mirrors 03-03's tune-sweep hash-gate test); OOS bars restricted to regime.oos_start/oos_end only; determine_survivor's 3-way branch (survivor/insufficient_sample/killed) with the 15-trade floor | unit | `python -m pytest tests/test_oos_validation.py -q -x` (includes the new hash-gate fixture test, call-count spy on run_backtest) | new (Wave 4) | planned |
 | 03-05-T2 | 03-05 | 4 | STRAT-04, STRAT-05 | T-03-16 | Real OOS validation over every candidate; oos_results.json records every verdict, not only survivors; reproducible on re-run | integration (real, offline, <1 min, per-plan acceptance) | `python -m trader.backtest.run_oos_validation_all` | new (Wave 4) | planned |
-| 03-06-T1 | 03-06 | 5 | STRAT-06 | T-03-19 | sweep_report renders both "some survivors" and "nothing survived" branches, quoting the real trial count | unit | `python -m pytest tests/test_sweep_report.py -q -x` | new (Wave 5) | planned |
-| 03-06-T2 | 03-06 | 5 | STRAT-06 | T-03-17, T-03-18 | KILL-CONDITIONS.md gate: 1:1 survivor coverage with 3 numeric triggers each, or the exact nothing-survived sentence; committed before Phase 4 | integration/gate (real run + parse) | `python -m pytest tests/test_kill_conditions.py -q -x` | new (Wave 5) | planned |
+| 03-06-T1 | 03-06 | 5 | STRAT-06 | T-03-19 | sweep_report renders both "some survivors" and "nothing survived" branches, quoting the real trial count, always carrying D-05's survivorship-bias caveat | unit | `python -m pytest tests/test_sweep_report.py -q -x` | new (Wave 5) | planned |
+| 03-06-T2 | 03-06 | 5 | STRAT-06 | T-03-17, T-03-18, T-03-20 | KILL-CONDITIONS.md gate: 1:1 survivor coverage with 3 numeric triggers each, or the exact nothing-survived sentence; write_kill_conditions.main() calls verify_frozen() first as defence in depth; committed before Phase 4 | integration/gate (real run + parse) | `python -m pytest tests/test_kill_conditions.py -q -x` | new (Wave 5) | planned |
 
 ---
 
@@ -65,7 +65,7 @@ All Wave 0 gaps identified in 03-RESEARCH.md are now assigned to concrete planne
 - [x] `tests/test_sweep_engine.py` — assigned to 03-03-T1/T2 (STRAT-03)
 - [x] `tests/test_regime_config.py` — assigned to 03-02-T1 (STRAT-04, STRAT-05)
 - [x] `tests/test_exit_grid.py`, `tests/test_frozen_config.py` — assigned to 03-02-T2 (STRAT-03, frozen-before-results gate)
-- [x] `tests/test_oos_validation.py` — assigned to 03-05-T1 (STRAT-05)
+- [x] `tests/test_oos_validation.py` — assigned to 03-05-T1 (STRAT-05, now including the hash-gate fixture test)
 - [x] Kill-conditions gate (`tests/test_kill_conditions.py`) — assigned to 03-06-T2 (STRAT-06)
 
 ---
@@ -88,4 +88,4 @@ All Wave 0 gaps identified in 03-RESEARCH.md are now assigned to concrete planne
 - [x] Feedback latency < 30s (fast loop; live/real-run tasks explicitly exempted per Sampling Rate section)
 - [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** plans created 2026-07-26 by `/gsd:plan-phase 3`; pending execution via `/gsd:execute-phase 3`.
+**Approval:** plans created 2026-07-26 by `/gsd:plan-phase 3`; revised 2026-07-26 per plan-checker feedback (frozen-config hash gate now enforced at the OOS-validation entrypoint in addition to the tune-sweep entrypoint, plus a defence-in-depth check at the final kill-conditions gate). Pending execution via `/gsd:execute-phase 3`.

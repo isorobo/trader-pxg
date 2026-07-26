@@ -439,20 +439,23 @@ def pick_entries(iterator, date, open_positions, rng):
 | A5 | Recommending sequential (non-parallel) execution overrides the project's `config.json` `"parallelization": true` default | Sweep Engineering | If the owner strongly prefers parallel execution regardless of the small time saving, the planner should add a WAL-mode/per-worker-connection task rather than skip parallelisation silently |
 | A6 | Memecoins (PEPE/BONK/WIF) now have enough history for two real regimes, reversing the phase document's original "too short for regime splits" framing | Universe / Regime Windows | If the owner intended memecoins to stay a documented gap regardless of elapsed time, this expands Phase 3 scope beyond what was originally discussed — flagged explicitly for confirmation |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Breakout retest-entry variant.** The owner's library file 03 recommends waiting for a retest of the broken level ("lowers trade frequency but meaningfully improves quality"). Should Phase 3 sweep both with-retest and without-retest as an entry variant?
    - What we know: retest is described as strictly optional/preferred, not mandatory, in the reference spec.
    - What's unclear: whether the resulting frequency drop would starve the already-thin crypto-bear and WIF-mania OOS windows below the minimum-trade-count floor.
    - Recommendation: fix to no-retest for v1 (maximises trade count for statistical power in the thin windows); revisit only if false-breakout rate looks like the dominant failure mode in the tune-sweep results.
+   - **RESOLVED (orchestrator):** Breakout v1 ships no-retest, matching the recommendation exactly — maximises OOS trade count. Retest variant deferred, not built this phase (see 03-01-PLAN.md Task 2, breakout.py module docstring).
 
 2. **Memecoin-specific time-stop variant.** D-06 says "memecoins additionally test eod_flat-style short holds" — is this a 4th `TIME_STOPS` value added ONLY to the memecoin bucket's grid (270→360 cells, +~1.5 min), or a replacement of one of the existing three values?
    - Recommendation: additive (superset), since it's cheap and doesn't reduce coverage of the existing three variants.
+   - **RESOLVED (orchestrator):** Additive, exactly as recommended — the memecoin bucket's grid grows to 360 cells (6x5x3x4), never replacing the base three TIME_STOPS values (see 03-02-PLAN.md Task 2, exit_grid.py's MEMECOIN_SHORT_HOLD_DAYS).
 
 3. **Correlation risk within the stock universe.** Several of the 15 additional names (NVDA, AMD, TSLA, AMZN, META, NFLX, CRM, ADBE) are all AI/growth-tech names that likely moved together during 2023-2024's AI-driven rally.
    - What we know: the momentum/breakout survivors could reflect one correlated cluster's move, not broad-based strategy edge.
    - What's unclear: exact pairwise correlation over the regime windows (not computed in this research pass).
    - Recommendation: report per-symbol P&L contribution for every survivor alongside the aggregate metrics (D-12's report), so a single-cluster-driven "survivor" is visible, not hidden. Full correlation gating remains Phase 4's job (RISK-01), not Phase 3's.
+   - **RESOLVED (orchestrator):** Per-symbol P&L is reported alongside aggregates in every sweep summary, exactly as recommended (see 03-06-PLAN.md's sweep_report.write_sweep_summary). Full correlation gating stays out of scope, deferred to Phase 4 (RISK-01).
 
 ## Environment Availability
 
