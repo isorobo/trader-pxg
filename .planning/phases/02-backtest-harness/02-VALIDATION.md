@@ -50,12 +50,13 @@ updated: 2026-07-26
 | 02-04 T1 | 02-04 | 2 | BACK-02, BACK-03 | T-02-07, T-02-08 | config-driven fee/slippage, always adverse | unit | `pytest tests/test_backtest_fills.py -x -q` | Wave 0 | ⬜ pending |
 | 02-05 T1 | 02-05 | 2 | BACK-04 | T-02-09, T-02-10, T-02-11 | D-10 order, entry-bar check, stop-wins-tie, trailing no-lookahead | unit | `pytest tests/test_backtest_exits.py -x -q` | Wave 0 | ⬜ pending |
 | 02-06 T1 | 02-06 | 2 | BACK-05 | T-02-12, T-02-13, T-02-SC | parameterized SQL, reproducibility, no subprocess | unit | `pytest tests/test_backtest_ledger.py -x -q` | Wave 0 | ⬜ pending |
+| 02-06 T2 | 02-06 | 2 | BACK-06 | T-02-23 | per-strategy grouping, no cross-strategy leakage | unit | `pytest tests/test_backtest_ledger.py -k strategy -x -q` | Wave 0 | ⬜ pending |
 | 02-07 T1 | 02-07 | 2 | BACK-07 | T-02-14, T-02-15 | seeded, reproducible, price-blind random strategy | unit | `pytest tests/test_backtest_strategies.py -k random -x -q` | Wave 0 | ⬜ pending |
 | 02-07 T2 | 02-07 | 2 | BACK-07 | — | momentum placeholder, lookback-gated signal | unit | `pytest tests/test_backtest_strategies.py -k momentum -x -q` | Wave 0 | ⬜ pending |
 | 02-08 T1 | 02-08 | 3 | BACK-01, BACK-04, BACK-05 | T-02-16, T-02-17, T-02-18 | signal-to-fill lag, entry-bar exit, reproducible ledger | integration | `pytest tests/test_backtest_runner.py -x -q` | Wave 0 | ⬜ pending |
 | 02-09 T1 | 02-09 | 4 | BACK-07 | T-02-SC | one-time live backfill, offline thereafter | live/manual (exempt) | `python -m trader.backtest.sanity_universe` | Wave 0 | ⬜ pending |
 | 02-09 T2 | 02-09 | 4 | BACK-07 | T-02-19, T-02-20 | non-circular tolerance band, N>=3000, no silent skip | acceptance (permanent) | `pytest tests/test_backtest_sanity.py -x -q` | Wave 0 | ⬜ pending |
-| 02-10 T1 | 02-10 | 5 | BACK-06 | T-02-21, T-02-22 | end-to-end report, finite metrics, trade_count>=1 | integration | `pytest tests/test_backtest_momentum_e2e.py -x -q` | Wave 0 | ⬜ pending |
+| 02-10 T1 | 02-10 | 4 | BACK-06 | T-02-21, T-02-22 | end-to-end report, finite metrics, trade_count>=1 | integration | `pytest tests/test_backtest_momentum_e2e.py -x -q` | Wave 0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -69,7 +70,7 @@ updated: 2026-07-26
 - [ ] `tests/test_backtest_metrics.py` — golden hand-computed fixture: PF, Sharpe, max DD, win rate, edge cases (BACK-06) — plan 02-03
 - [ ] `tests/test_backtest_fills.py` — per-venue fee table + per-class slippage application (BACK-02, BACK-03) — plan 02-04
 - [ ] `tests/test_backtest_exits.py` — profile evaluation order, entry-bar check, gap-through fills, stop-wins-tie, trailing no-lookahead (BACK-04) — plan 02-05
-- [ ] `tests/test_backtest_ledger.py` — per-fill rows, run reproducibility with pinned seed (BACK-05) — plan 02-06
+- [ ] `tests/test_backtest_ledger.py` — per-fill rows, run reproducibility with pinned seed, per-strategy attribution grouping (BACK-05, BACK-06) — plan 02-06
 - [ ] `tests/test_backtest_strategies.py` — seeded random strategy + momentum placeholder (BACK-07) — plan 02-07
 - [ ] `tests/test_backtest_runner.py` — full-pipe integration: signal-to-fill lag, entry-bar exit, reproducibility (BACK-01, BACK-04, BACK-05) — plan 02-08
 - [ ] `tests/test_backtest_sanity.py` — the exit-gate test: seeded random strategy loses ~ (fees+slippage) within the derived band; FAILS the suite if it profits (BACK-07) — plan 02-09

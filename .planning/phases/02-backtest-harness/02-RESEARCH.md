@@ -421,17 +421,19 @@ def recommended_band(observed_pnls: list[float], expected_bias: float, k: float 
 
 **If this table is empty:** N/A — see entries above; all core fill/tie-break/formula/schema mechanics are CITED or VERIFIED, only the numeric calibration choices and one optional dependency are ASSUMED.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **What is the actual pinned universe and history length for the D-14 sanity test?**
    - What we know: D-14 requires "the band and universe are pinned in the test"; D-15's `CRYPTO_COINGECKO_IDS` in `trader/data/api.py` gives a candidate crypto universe (BTC, ETH, DOGE, SHIB, PEPE, BONK, WIF).
    - What's unclear: which stock symbols (if any) join that universe, and how many years of cached history are actually available per symbol (depends on what Phase 1's fetchers have pulled so far).
    - Recommendation: the planner should have the implementation task compute the actual realized daily-return volatility of the chosen universe from cached data, then re-derive N and the tolerance band from Q4's method using real numbers, not the illustrative 1.5%/0.15% example above.
+   - **RESOLUTION (locked by orchestrator, implemented in 02-09-PLAN.md):** pinned universe = AAPL, MSFT, GOOGL (large-cap US stocks) + BTC/USDT, ETH/USDT, DOGE/USDT (BTC/ETH majors, reusing the already-cached AAPL/BTC/USDT/DOGE/USDT plus a small one-time backfill of MSFT, GOOGL, ETH/USDT). Full available cached history is used (AAPL alone already provides 11,495 rows back to 1980); the test asserts a hard N >= 3,000 floor. The tolerance band's center is the run's own recorded fees+slippage (not a pre-computed illustrative constant), and its width is 3 standard errors of the run's own pnl_pct — i.e. derived from the run's own standard error, not guessed or hardcoded, per Q4's method below.
 
 2. **One ledger row per fill (including scale-out tranches) or one row per full round-trip position?**
    - What we know: D-11 lists `entry_ts/price, exit_ts/price` (singular), suggesting one row per position; D-09's `scale_out` field implies multiple partial exits per position.
    - What's unclear: whether "every simulated trade" in BACK-05 means every fill event or every completed position.
    - Recommendation: default to one row per fill event (entry + each scale-out tranche + final exit), sharing a `position_id`/`trade_group_id`, since this is more auditable and directly matches "every simulated trade is attributable" — but flag this for explicit confirmation during planning since it changes the schema.
+   - **RESOLUTION (locked by orchestrator, implemented in 02-06-PLAN.md's interfaces block):** one row per FILL. A position that exits fully in one shot is one row (entry_ts/price + exit_ts/price on the same row, matching D-11's literal column list). A position with scale-out tranches produces one row per tranche, each sharing the same `position_id`, each with entry_ts/entry_price repeated (denormalized) and its own exit_ts/exit_price/qty/fees/slippage/pnl/exit_reason. Per-position totals derive by `SUM(pnl) ... GROUP BY position_id` — no separate entry-only stub row is created.
 
 ## Environment Availability
 
