@@ -11,7 +11,7 @@ directory as a side effect of alerts.notify's hard-coded default log path.
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 import pytest
@@ -413,6 +413,120 @@ def test_already_retired_strategy_never_re_evaluated_no_duplicate_alert(paper_co
     assert len(first) == 1
     assert second == []
     assert mock_notify.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# Task 3 -- account-level breaker evaluation with real-time alert
+# ---------------------------------------------------------------------------
+
+
+def test_evaluate_account_breakers_builds_equity_curve_from_all_trades(paper_conn):
+    _insert_trade(paper_conn, "s1", pnl=1000.0, exit_ts="2026-01-01T09:30:00")
+    _insert_trade(paper_conn, "s2", pnl=-500.0, exit_ts="2026-01-02T09:30:00")
+
+    evaluation = guardian.evaluate_account_breakers(paper_conn)
+
+    assert evaluation["daily_loss_tripped"] is False
+    from trader.risk import breakers
+
+    state = breakers.read_breaker_state(paper_conn)
+    assert state["daily_loss"]["current_action"] == "normal"
+
+
+def test_fresh_breaker_trip_fires_real_time_alert_exactly_once(paper_conn, monkeypatch):
+    mock_notify = MagicMock(wraps=guardian.alerts.notify)
+    monkeypatch.setattr(guardian.alerts, "notify", mock_notify)
+
+    # A single -5% trade trips ONLY daily_loss (threshold -3%), not
+    # drawdown (threshold -10%) or consecutive_loss (threshold 6) --
+    # isolating the "exactly one alert per transition" assertion to one
+    # breaker type.
+    _insert_trade(paper_conn, "s1", pnl=-5_000.0, exit_ts="2026-01-01T09:30:00")
+
+    guardian.evaluate_account_breakers(paper_conn)
+    error_calls = [c for c in mock_notify.call_args_list if c.args[0] == "error"]
+    assert len(error_calls) == 1
+
+    # A second call with the SAME (still-tripped) data must not re-fire.
+    guardian.evaluate_account_breakers(paper_conn)
+    error_calls = [c for c in mock_notify.call_args_list if c.args[0] == "error"]
+    assert len(error_calls) == 1
+
+    from trader.risk import breakers
+
+    state = breakers.read_breaker_state(paper_conn)
+    assert state["daily_loss"]["current_action"] == "trip"
+
+
+# ---------------------------------------------------------------------------
+# Task 3 -- heartbeat (BLOCKER 4: no fourth scheduled task)
+# ---------------------------------------------------------------------------
+
+
+def test_heartbeat_due_true_on_missing_log(tmp_path):
+    log_path = str(tmp_path / "does_not_exist.log")
+    assert guardian._heartbeat_due(log_path, datetime.now(timezone.utc)) is True
+
+
+def test_heartbeat_due_false_immediately_after_heartbeat_entry(tmp_path):
+    log_path = str(tmp_path / "paper_trading.log")
+    now = datetime(2026, 7, 27, 12, 0, tzinfo=timezone.utc)
+    with open(log_path, "w", encoding="utf-8") as f:
+        f.write(f"{now.isoformat()}|heartbeat|guardian alive\n")
+
+    assert guardian._heartbeat_due(log_path, now) is False
+    assert guardian._heartbeat_due(log_path, now + timedelta(hours=11)) is False
+    assert guardian._heartbeat_due(log_path, now + timedelta(hours=13)) is True
+
+
+def test_run_guardian_once_heartbeat_fires_at_least_every_twelve_hours(
+    paper_conn, fake_ib, tmp_path, monkeypatch
+):
+    """Integration-level: run_guardian_once's own _heartbeat_due gating,
+    exercised end to end. alerts.notify is replaced with a fake that writes
+    a heartbeat line stamped with the SAME injected `now` the test controls
+    (never the real wall clock -- ops_log.append_ops_log always stamps with
+    datetime.now(timezone.utc), which would make a real-file version of
+    this test non-deterministic)."""
+    adapter = _ibkr_adapter(fake_ib)
+    log_path = str(tmp_path / "paper_trading.log")
+    heartbeat_calls: list[str] = []
+    current_now = {"value": None}
+
+    def _fake_notify(entry_type, message):
+        if entry_type == "heartbeat":
+            heartbeat_calls.append(message)
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(f"{current_now['value'].isoformat()}|heartbeat|{message}\n")
+        return True
+
+    monkeypatch.setattr(guardian.alerts, "notify", _fake_notify)
+
+    first = datetime(2026, 7, 27, 9, 0, tzinfo=timezone.utc)
+    current_now["value"] = first
+    guardian.run_guardian_once(paper_conn, adapter, now=first, log_path=log_path)
+    assert len(heartbeat_calls) == 1
+
+    five_min_later = first + timedelta(minutes=5)
+    current_now["value"] = five_min_later
+    guardian.run_guardian_once(paper_conn, adapter, now=five_min_later, log_path=log_path)
+    assert len(heartbeat_calls) == 1
+
+    thirteen_hours_later = first + timedelta(hours=13)
+    current_now["value"] = thirteen_hours_later
+    guardian.run_guardian_once(paper_conn, adapter, now=thirteen_hours_later, log_path=log_path)
+    assert len(heartbeat_calls) == 2
+
+
+def test_no_new_task_scheduler_xml_created_by_task_3():
+    """BLOCKER 4's 'no fourth scheduled task' constraint: exactly the
+    existing paper_guardian_task.xml (Task 1's own artifact), never a
+    second/heartbeat-specific XML file."""
+    from pathlib import Path
+
+    scripts_dir = Path(__file__).resolve().parents[1] / "scripts"
+    xml_files = sorted(p.name for p in scripts_dir.glob("*guardian*task*.xml"))
+    assert xml_files == ["paper_guardian_task.xml"]
 
 
 # ---------------------------------------------------------------------------

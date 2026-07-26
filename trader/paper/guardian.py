@@ -14,17 +14,25 @@ T-05-13).
 This module also evaluates D-01's five live kill conditions every tick,
 auto-retiring any strategy_config that trips one (T-05-09 -- thresholds are
 read only from the frozen `config.LIVE_STRATEGY_CONFIGS`, never recomputed
-from live results).
+from live results), evaluates Phase 4's account-level circuit breakers
+against the real paper equity curve and fires a real-time alert on any new
+trip (W1/W4, T-05-15 -- this is the only Phase 5 caller that feeds Phase 4's
+breaker evaluation live data), and folds D-11's twice-daily heartbeat
+directly into the existing tick (BLOCKER 4) -- no fourth scheduled task.
 
-Task 3 (account-level breaker evaluation + heartbeat) is added on top of
-this in a later commit.
+The heartbeat-due check reads ops/paper_trading.log directly (the pipe-
+delimited "{iso_ts}|{entry_type}|{message}" format Plan 05-02's
+`trader.paper.ops_log.append_ops_log` already writes) rather than re-touching
+that module.
 """
 
 from __future__ import annotations
 
 import argparse
+import os
+import sqlite3
 import sys
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from trader.backtest import metrics
 from trader.backtest.config import EXIT_PROFILE
@@ -32,6 +40,14 @@ from trader.backtest.exits import ExitResult, PositionState, evaluate_exit, next
 from trader.backtest.fills import fee_for
 from trader.paper import alerts, broker_crypto_sim, calendar_, config, idempotency, ledger
 from trader.paper.broker_ibkr import IBKRBrokerAdapter
+from trader.risk import breakers
+
+# The same ops-log path Plan 05-02's ops_log module defaults to (documented,
+# stable contract) -- the heartbeat-due check reads this file directly
+# rather than re-touching trader/paper/ops_log.py.
+_OPS_LOG_PATH = "ops/paper_trading.log"
+
+_BREAKER_TYPES = ("daily_loss", "drawdown", "consecutive_loss")
 
 # migrations/0003_backtest.sql's exit_reason CHECK <-> migrations/0005's
 # paper_orders.intent CHECK -- one place these two vocabularies are mapped,
@@ -281,20 +297,98 @@ def evaluate_kill_conditions(conn) -> list[dict]:
     return retired
 
 
+# ---------------------------------------------------------------------------
+# Task 3: account-level breaker evaluation with real-time alert + heartbeat
+# ---------------------------------------------------------------------------
+
+
+def _get_all_trades_chronological(conn) -> list[dict]:
+    cursor = conn.cursor()
+    cursor.row_factory = sqlite3.Row
+    rows = cursor.execute("SELECT * FROM paper_trades ORDER BY exit_ts ASC").fetchall()
+    return [dict(row) for row in rows]
+
+
+def evaluate_account_breakers(conn) -> dict:
+    """W1/W4: the missing wiring that gives `is_entry_halted`'s Phase-4-
+    breaker check real data to read. Fires a real-time alert on any fresh
+    normal->trip transition -- not just an ops-log line."""
+    trades = _get_all_trades_chronological(conn)
+    pnls = [t["pnl"] for t in trades]
+
+    equity_curve = [config.PAPER_ACCOUNT_EQUITY]
+    running = config.PAPER_ACCOUNT_EQUITY
+    for pnl in pnls:
+        running += pnl
+        equity_curve.append(running)
+
+    previous_state = breakers.read_breaker_state(conn)
+    evaluation = breakers.evaluate_breakers(equity_curve, pnls)
+
+    for breaker_type in _BREAKER_TYPES:
+        was_tripped = previous_state[breaker_type]["current_action"] == "trip"
+        now_tripped = evaluation[f"{breaker_type}_tripped"]
+        if not was_tripped and now_tripped:
+            value = evaluation.get(f"{breaker_type}_value")
+            if value is None:
+                value = evaluation.get("consecutive_loss_count")
+            alerts.notify("error", f"breaker {breaker_type} TRIPPED (value={value})")
+
+    # The actual persistence -- called for the first time anywhere in
+    # Phase 5, fired AFTER the alert above so the alert always reflects a
+    # transition this exact call is about to persist, never a stale one.
+    breakers.record_breaker_transitions(conn, previous_state, evaluation)
+    return evaluation
+
+
+def _heartbeat_due(log_path: str, now: datetime) -> bool:
+    """True iff at least 12 hours have elapsed since the last 'heartbeat'
+    ops-log entry (BLOCKER 4) -- a missing file is treated as "due"."""
+    if not os.path.exists(log_path):
+        return True
+
+    latest: datetime | None = None
+    with open(log_path, encoding="utf-8") as f:
+        for line in f:
+            parts = line.rstrip("\n").split("|", 2)
+            if len(parts) != 3:
+                continue
+            ts_str, entry_type, _message = parts
+            if entry_type != "heartbeat":
+                continue
+            try:
+                ts = datetime.fromisoformat(ts_str)
+            except ValueError:
+                continue
+            if latest is None or ts > latest:
+                latest = ts
+
+    if latest is None:
+        return True
+    return (now - latest) >= timedelta(hours=12)
+
+
 def run_guardian_once(
     conn,
     ibkr_adapter,
     crypto_adapter=None,
     now: datetime | None = None,
+    log_path: str = _OPS_LOG_PATH,
 ) -> dict:
     """One guardian tick (D-05, no daemon mode): re-evaluate every open
-    position's exit."""
+    position's exit, evaluate Phase 4's account-level breakers, evaluate
+    D-01's kill conditions, and fire a heartbeat if due (BLOCKER 4)."""
     if now is None:
         now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
     as_of_date = now.date()
 
     open_positions = ledger.get_open_positions(conn)
+
+    if _heartbeat_due(log_path, now):
+        alerts.notify(
+            "heartbeat", f"guardian alive: {len(open_positions)} open positions"
+        )
 
     # Fetched once per run, reused for both the same-tick fast path and the
     # crash-recovery path.
@@ -336,6 +430,9 @@ def run_guardian_once(
         if outcome is not None:
             exits.append(outcome)
 
+    # Both run every tick regardless of whether any exit fired this tick
+    # (order between the two is not load-bearing).
+    evaluate_account_breakers(conn)
     evaluate_kill_conditions(conn)
 
     return {"exits": exits, "ticked": len(open_positions)}
