@@ -11,7 +11,7 @@ See: .planning/PROJECT.md (updated 25 July 2026)
 
 Phase: 0 of 0–10 (Ground Truth)
 Plan: Phases 3 AND 4 CLOSED (verified passed 10/10 and 17/17). FIVE OOS SURVIVORS (momentum/stock/choppy/loose, PF 2.3-20.4). Phase 5 discussion next
-Status: Phases 2, 3, 4 closed. Phase 5 (paper loop) opening — execution will checkpoint on user items: Kraken trade-only keys → .env, IBKR Gateway login, Telegram bot token. Phase 0 monitoring to 2026-08-09; Phase 1 accounts UAT open
+Status: Phases 2-4 closed; Phase 5 built (511 tests). Ops checkpoint: Telegram VERIFIED (heartbeat received on phone 2026-07-27); Gateway awaiting IBKR approval (U27412777 identity verification in process). Phase 0 monitoring to 2026-08-09
 Last activity: 2026-07-26 — v2: 10,800 runs, 5 survivors, kill conditions registered; Phase 4 safety layer verified
 
 Progress: [█████░░░░░] 47%
