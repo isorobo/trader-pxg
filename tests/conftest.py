@@ -8,6 +8,23 @@ from trader.ground_truth import db
 from trader.data import db as trader_db
 
 
+@pytest.fixture(autouse=True)
+def _no_real_telegram(monkeypatch):
+    """Never let the test suite send real Telegram messages (Phase 7 fix).
+
+    alerts.notify() calls load_dotenv() at call time, so once the owner's
+    real TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID landed in .env (05-08 ops
+    checkpoint, 2026-07-27) every test that reached alerts.notify -- kill
+    retirements, breaker trips, fills -- fired a REAL message at the owner's
+    phone and made token-unset tests flaky. Strip the env vars and neuter
+    alerts' load_dotenv for every test; tests that need a configured
+    Telegram set the env vars explicitly via monkeypatch.setenv.
+    """
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
+    monkeypatch.setattr("trader.paper.alerts.load_dotenv", lambda *a, **k: None)
+
+
 @pytest.fixture
 def tmp_db_path(tmp_path):
     """Path to a fresh, non-existent SQLite file inside pytest's tmp_path."""

@@ -71,6 +71,12 @@ class LiveStrategyConfig:
     pf_floor: float
     max_dd_kill: float
     consecutive_loss_kill: int
+    # Phase 7 (D-04/D-08): the registry row's tournament state --
+    # 'probation' rows are sized at PROBATION_SIZE_MULTIPLIER by the entry
+    # pipeline. Defaults to 'full' so this module's own literal tuple below
+    # (the pre-Phase-7 transcription, kept as the seed reference) is
+    # unchanged. The live loader is trader/paper/config_store.py.
+    state: str = "full"
 
 
 # The five real D-01 survivor configs (KILL-CONDITIONS.md / D-01
