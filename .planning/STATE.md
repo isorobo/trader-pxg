@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 25 July 2026)
 
 **Core value:** The system never lies to itself — every strategy must prove its edge on honest data before any capital is at risk.
-**Current focus:** Phase 0 — Ground Truth (Phase 1 discussed, planning queued)
+**Current focus:** Phase 7 — Attribution & Tournament (built, owner audit pending) alongside Phase 0 monitoring
 
 ## Current Position
 
-Phase: 0 of 0–10 (Ground Truth)
-Plan: Phases 3 AND 4 CLOSED (verified passed 10/10 and 17/17). FIVE OOS SURVIVORS (momentum/stock/choppy/loose, PF 2.3-20.4). Phase 5 discussion next
-Status: Phases 2-4 closed; Phase 5 built (511 tests). Ops checkpoint: Telegram VERIFIED (heartbeat received on phone 2026-07-27); Gateway awaiting IBKR approval (U27412777 identity verification in process). Phase 0 monitoring to 2026-08-09
-Last activity: 2026-07-26 — v2: 10,800 runs, 5 survivors, kill conditions registered; Phase 4 safety layer verified
+Phase: 7 of 0–10 (Attribution & Tournament) — BUILT, owner audit pending
+Plan: Phase 7 executed 2026-07-28 (plans 07-01/07-02, waves 1–6, 572 tests green). Registry-backed live configs (D-08), D-07 entrant pipeline, weekly judge with frozen rules (hash d5df6e82...), attribution dashboards, weekly scheduler artifacts (registration deferred to 05-09 batch)
+Status: Phases 2-4 closed; Phase 5 built (511→572 tests). Ops checkpoint: Telegram VERIFIED (2026-07-27); Gateway awaiting IBKR approval (U27412777). Phase 0 monitoring to 2026-08-09. Phase 7 exit gate: owner audit of reports/tournament/fixture-demo/2026-07-28-run1.md + frozen-threshold review (floors 0.0/0.0, K=4 — one sanctioned adjustment allowed before first real run)
+Last activity: 2026-07-28 — Phase 7 built. BUG FIX: guardian kill conditions keyed on family strategy_id (matched zero trades, could never trip); now keyed on profile_name. Test suite no longer sends real Telegram messages (conftest guard)
 
-Progress: [█████░░░░░] 47%
+Progress: [██████░░░░] 62%
 
 ## Performance Metrics
 
@@ -45,25 +45,30 @@ Recent decisions affecting current work:
 - [Init]: Phases 0–10 fixed by the owner; exit criteria gate every transition
 - [Init]: SQLite before Postgres; free daily bars before paid data
 - [Init]: API keys trade-only, never withdrawal-enabled
+- [Phase 7]: Incumbent five configs grandfathered at state='full' in strategy_registry (behaviour of live paper trading unchanged); a changed config is a NEW entrant
+- [Phase 7]: Tournament thresholds frozen behind trader/tournament/freeze_gate.py (D-06); owner may make ONE reviewed adjustment before the first real run
 
 ### Pending Todos
 
-- Phase 3 discussion MUST read `Strategys/` (owner-curated strategy library, added 2026-07-26) as a canonical ref — includes the phase-doc strategies (Momentum, Breakout) plus candidates (Donchian, RSI-2, TS-momentum) for the Phase 7 pipeline. Phase doc precedence rules on any conflict.
+- Owner: audit reports/tournament/fixture-demo/2026-07-28-run1.md (Phase 7 exit gate) and review frozen floors (0.0/0.0, K=4)
+- 05-09 go-live batch gains one line: `schtasks /Create /TN "TraderAI Tournament" /XML scripts\tournament_run_task.xml`
+- Phase 8 entrants queue: Strategys/ files 10–12 (Donchian, RSI-2, TS-momentum) enter via pipeline.register_candidate once their signal code exists
 - Owner question pending: wire trader-pxg GitHub repo as remote? (currently public — recommend private first)
 
 ### Blockers/Concerns
 
 - IBKR and Independent Reserve approvals take days — start applications before build work needs them
 - US market hours run ~1:30am–8am NZ time; later phases must run unattended overnight
+- Judging-Sharpe comparability: metrics.py 0-fills no-trade days, understating variance for low-frequency strategies; PF tie-break partially compensates (pre-registered in frozen_config.py docstring)
 
 ## Deferred Items
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| *(none)* | | | |
+| Ops | Weekly tournament schtasks registration | Folded into 05-09 batch | 2026-07-28 |
 
 ## Session Continuity
 
-Last session: 2026-07-26
-Stopped at: Phase 0 planned and verified; ready to execute
-Resume file: .planning/phases/00-ground-truth/00-01-PLAN.md
+Last session: 2026-07-28
+Stopped at: Phase 7 executed and verified (572 tests); owner audit of the fixture decision record is the remaining exit check
+Resume file: .planning/phases/07-attribution-tournament/07-VALIDATION.md
