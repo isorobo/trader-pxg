@@ -43,9 +43,10 @@ from trader.backtest.strategies.momentum_v2 import (
 )
 from trader.backtest.universe import STOCK_UNIVERSE
 from trader.data.api import get_daily_bars
-from trader.paper import alerts, calendar_, config, idempotency, ledger, ops_log, reconcile
+from trader.paper import alerts, calendar_, config, config_store, idempotency, ledger, ops_log, reconcile
 from trader.paper import broker_ibkr
 from trader.risk import gate, sizer
+from trader.tournament import frozen_config as tournament_frozen_config
 
 _ENTRY_SIDE = "buy"
 _ENTRY_INTENT = "entry"
@@ -173,21 +174,25 @@ def assign_exit_profile(symbol: str, live_profile_names: list[str]) -> str:
 
 
 def _live_profile_names(conn) -> list[str]:
-    """The profile_names of every live (non-retired) strategy_config.
+    """The profile_names of every live (non-retired) strategy_config, read
+    from the strategy_registry via config_store (Phase 7, D-08 -- the
+    registry already excludes retired/candidate rows; the
+    is_strategy_retired check stays as defence in depth, both systems must
+    agree a config is live).
 
-    Raises RuntimeError, not a silent empty return, when all five configs
-    are retired -- a T-05-11-shaped visibility gap otherwise (this process
+    Raises RuntimeError, not a silent empty return, when no live config
+    remains -- a T-05-11-shaped visibility gap otherwise (this process
     would silently enter zero positions forever without ever surfacing
     why).
     """
     names = [
         cfg.profile_name
-        for cfg in config.LIVE_STRATEGY_CONFIGS
+        for cfg in config_store.get_live_configs(conn)
         if not ledger.is_strategy_retired(conn, cfg.profile_name)
     ]
     if not names:
         raise RuntimeError(
-            "all five live strategy configs are retired -- nothing left to trade"
+            "every live strategy config is retired -- nothing left to trade"
         )
     return names
 
@@ -219,6 +224,7 @@ def _run_step0_heal_pass(conn, ibkr_adapter, broker_fills: list[dict]) -> list[s
     close_position and must not try to.
     """
     healed_this_run: list[str] = []
+    live_configs_by_name = config_store.get_live_configs_by_profile_name(conn)
     for local_order in ledger.get_all_unresolved_orders(conn):
         if local_order["intent"] != _ENTRY_INTENT:
             continue
@@ -231,7 +237,7 @@ def _run_step0_heal_pass(conn, ibkr_adapter, broker_fills: list[dict]) -> list[s
 
         strategy_id = local_order["strategy_id"]
         symbol = local_order["symbol"]
-        cfg = config.LIVE_STRATEGY_CONFIGS_BY_PROFILE_NAME.get(strategy_id)
+        cfg = live_configs_by_name.get(strategy_id)
         if cfg is None:
             # A retired/unknown strategy_id -- do not open a position under
             # a config this process no longer recognizes.
@@ -330,6 +336,7 @@ def run_entry_pipeline_once(conn, ibkr_adapter, as_of_date: date | None = None) 
     # Raises RuntimeError if every live config has been retired -- always
     # called once real candidates exist this run (T-05-11).
     live_profile_names = _live_profile_names(conn)
+    live_configs_by_name = config_store.get_live_configs_by_profile_name(conn)
 
     open_positions_for_sizer = [
         {
@@ -347,14 +354,25 @@ def run_entry_pipeline_once(conn, ibkr_adapter, as_of_date: date | None = None) 
     # REVISED per-position sequence -- this exact order is load-bearing
     # and must not be reshuffled (D-08 no-bypass-path, BLOCKER 1).
     for position in sized["positions"]:
-        dollar_amount = position["weight"] * config.PAPER_ACCOUNT_EQUITY
+        # Phase 7 (D-04): profile_name/cfg resolve BEFORE dollar_amount so
+        # probation-state configs can be sized at the frozen 25% multiplier.
+        # assign_exit_profile needs only symbol + live_profile_names, both
+        # already known here -- the symbol-only hash assignment is
+        # unchanged. Heal paths (STEP 0 above, STEP 1 below) never apply
+        # the multiplier: they reconstruct an already-placed order's qty
+        # verbatim (07-RESEARCH.md Pitfall 3).
+        profile_name = assign_exit_profile(position["symbol"], live_profile_names)
+        cfg = live_configs_by_name[profile_name]
+        multiplier = (
+            tournament_frozen_config.PROBATION_SIZE_MULTIPLIER
+            if cfg.state == "probation"
+            else 1.0
+        )
+        dollar_amount = position["weight"] * config.PAPER_ACCOUNT_EQUITY * multiplier
         price = market_data[(position["symbol"], position["venue"])]["bars"][-1]["close"]
         qty = broker_ibkr.round_shares_down(dollar_amount, price)
         if qty <= 0:
             continue
-
-        profile_name = assign_exit_profile(position["symbol"], live_profile_names)
-        cfg = config.LIVE_STRATEGY_CONFIGS_BY_PROFILE_NAME[profile_name]
 
         # STEP 1 (per-candidate heal check, defensive second layer): ANY
         # date, not just today -- nearly always a no-op for anything STEP 0

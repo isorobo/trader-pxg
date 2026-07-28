@@ -1,4 +1,4 @@
-"""Tests for trader.paper.guardian -- the 5-minute-cadence exit-monitoring
+﻿"""Tests for trader.paper.guardian -- the 5-minute-cadence exit-monitoring
 process (05-05-PLAN.md).
 
 Uses the paper_conn fixture (tests/conftest.py, every migration applied) and
@@ -17,11 +17,16 @@ from unittest.mock import MagicMock
 import pytest
 
 from trader.backtest.config import EXIT_PROFILE
+from trader.paper import config as paper_config
 from trader.paper import guardian, ledger
 from trader.paper.broker_ibkr import IBKRBrokerAdapter
 
 TRADING_DAY = datetime(2026, 7, 27, 15, 0, tzinfo=timezone.utc)  # a real NYSE Monday
 TRADING_DAY_2 = datetime(2026, 7, 28, 15, 0, tzinfo=timezone.utc)
+
+# Phase 7 identity fix: kill conditions key on profile_name (the identity
+# paper_trades rows actually carry), never the shared family strategy_id.
+_KILL_PROFILE = paper_config.LIVE_STRATEGY_CONFIGS[0].profile_name
 
 
 # ---------------------------------------------------------------------------
@@ -344,7 +349,7 @@ def _insert_trade(conn, strategy_id: str, pnl: float, exit_ts: str, symbol: str 
 
 
 def test_profit_factor_floor_retires_strategy(paper_conn):
-    strategy_id = "momentum_stock"
+    strategy_id = _KILL_PROFILE
     for i in range(15):
         _insert_trade(paper_conn, strategy_id, pnl=1.0, exit_ts=f"2026-01-{i + 1:02d}T09:30:00")
     for i in range(15):
@@ -359,7 +364,7 @@ def test_profit_factor_floor_retires_strategy(paper_conn):
 
 
 def test_max_drawdown_retires_strategy(paper_conn):
-    strategy_id = "momentum_stock"
+    strategy_id = _KILL_PROFILE
     for i in range(10):
         _insert_trade(paper_conn, strategy_id, pnl=100.0, exit_ts=f"2026-01-{i + 1:02d}T09:30:00")
     _insert_trade(paper_conn, strategy_id, pnl=-50.0, exit_ts="2026-01-11T09:30:00")
@@ -373,7 +378,7 @@ def test_max_drawdown_retires_strategy(paper_conn):
 
 
 def test_consecutive_losses_retires_strategy(paper_conn):
-    strategy_id = "momentum_stock"
+    strategy_id = _KILL_PROFILE
     for i in range(22):
         _insert_trade(paper_conn, strategy_id, pnl=100.0, exit_ts=f"2026-01-{i + 1:02d}T09:30:00")
     for i in range(8):
@@ -387,7 +392,7 @@ def test_consecutive_losses_retires_strategy(paper_conn):
 
 
 def test_fewer_than_thirty_trades_never_retires(paper_conn):
-    strategy_id = "momentum_stock"
+    strategy_id = _KILL_PROFILE
     for i in range(10):
         _insert_trade(paper_conn, strategy_id, pnl=-100.0, exit_ts=f"2026-01-{i + 1:02d}T09:30:00")
 
@@ -398,7 +403,7 @@ def test_fewer_than_thirty_trades_never_retires(paper_conn):
 
 
 def test_already_retired_strategy_never_re_evaluated_no_duplicate_alert(paper_conn, monkeypatch):
-    strategy_id = "momentum_stock"
+    strategy_id = _KILL_PROFILE
     for i in range(15):
         _insert_trade(paper_conn, strategy_id, pnl=1.0, exit_ts=f"2026-01-{i + 1:02d}T09:30:00")
     for i in range(15):

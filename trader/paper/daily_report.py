@@ -31,7 +31,7 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
-from trader.paper import config, ledger, ops_log, reconcile
+from trader.paper import config, config_store, ledger, ops_log, reconcile
 from trader.risk import breakers
 
 _OPS_LOG_PATH = "ops/paper_trading.log"
@@ -89,7 +89,9 @@ def compute_paper_section(conn: sqlite3.Connection, as_of: datetime | None = Non
     positions = ledger.get_open_positions(conn)
 
     recent_trades: list[dict] = []
-    for cfg in config.LIVE_STRATEGY_CONFIGS:
+    # Phase 7 (D-08): the live roster comes from the strategy_registry, so
+    # tournament promote/retire decisions show up here without code edits.
+    for cfg in config_store.get_live_configs(conn):
         recent_trades.extend(ledger.get_recent_trades(conn, cfg.profile_name, limit=5))
 
     breaker_state = breakers.read_breaker_state(conn)

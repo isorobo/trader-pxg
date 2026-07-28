@@ -38,7 +38,7 @@ from trader.backtest import metrics
 from trader.backtest.config import EXIT_PROFILE
 from trader.backtest.exits import ExitResult, PositionState, evaluate_exit, next_watermark
 from trader.backtest.fills import fee_for
-from trader.paper import alerts, broker_crypto_sim, calendar_, config, idempotency, ledger
+from trader.paper import alerts, broker_crypto_sim, calendar_, config, config_store, idempotency, ledger
 from trader.paper.broker_ibkr import IBKRBrokerAdapter
 from trader.risk import breakers
 
@@ -247,16 +247,27 @@ def _retire(conn, strategy_id: str, reason: str, trigger_value, retired: list[di
 
 
 def evaluate_kill_conditions(conn) -> list[dict]:
-    """D-01's five live kill conditions, evaluated every tick. Thresholds
-    are read only from the frozen `config.LIVE_STRATEGY_CONFIGS` (T-05-09) --
-    never recomputed from live results. Retired strategy_configs are never
-    re-evaluated (their open positions stay exit-managed regardless)."""
+    """D-01's live kill conditions, evaluated every tick. Thresholds are
+    read only from the pre-registered registry rows (T-05-09, seeded
+    verbatim from the frozen configs by migration 0006) -- never recomputed
+    from live results. Retired strategy_configs are never re-evaluated
+    (their open positions stay exit-managed regardless).
+
+    Phase 7 identity fix: everything here keys on ``cfg.profile_name``, the
+    identity trades and positions are actually recorded under
+    (entry_pipeline passes profile_name to open_position; close_position
+    copies it into paper_trades.strategy_id). The pre-Phase-7 code keyed on
+    ``cfg.strategy_id`` ("momentum_stock", shared by all five configs),
+    which matches zero paper_trades rows -- so the rolling-30 window never
+    filled and no kill condition could ever trip. Plumbing fix only; every
+    threshold is unchanged (standing rule 1 untouched).
+    """
     retired: list[dict] = []
-    for cfg in config.LIVE_STRATEGY_CONFIGS:
-        if ledger.is_strategy_retired(conn, cfg.strategy_id):
+    for cfg in config_store.get_live_configs(conn):
+        if ledger.is_strategy_retired(conn, cfg.profile_name):
             continue
 
-        trades = ledger.get_recent_trades(conn, cfg.strategy_id, limit=30)
+        trades = ledger.get_recent_trades(conn, cfg.profile_name, limit=30)
         if len(trades) < 30:
             # KILL-CONDITIONS.md's rolling-30-trade window is not yet full.
             continue
@@ -265,7 +276,7 @@ def evaluate_kill_conditions(conn) -> list[dict]:
 
         pf = metrics.profit_factor(pnls)
         if pf is not None and pf < cfg.pf_floor:
-            _retire(conn, cfg.strategy_id, "profit_factor_floor", pf, retired)
+            _retire(conn, cfg.profile_name, "profit_factor_floor", pf, retired)
             continue
 
         chronological_pnls = list(reversed(pnls))
@@ -276,7 +287,7 @@ def evaluate_kill_conditions(conn) -> list[dict]:
             equity_curve.append(running)
         dd = metrics.max_drawdown(equity_curve)
         if dd is not None and dd <= cfg.max_dd_kill:
-            _retire(conn, cfg.strategy_id, "max_drawdown", dd, retired)
+            _retire(conn, cfg.profile_name, "max_drawdown", dd, retired)
             continue
 
         # Mirrors trader.risk.breakers.evaluate_breakers's exact
@@ -291,7 +302,7 @@ def evaluate_kill_conditions(conn) -> list[dict]:
             else:
                 break
         if consecutive_losses >= cfg.consecutive_loss_kill:
-            _retire(conn, cfg.strategy_id, "consecutive_losses", consecutive_losses, retired)
+            _retire(conn, cfg.profile_name, "consecutive_losses", consecutive_losses, retired)
             continue
 
     return retired
