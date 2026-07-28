@@ -243,6 +243,27 @@ def main(argv=None) -> None:
             error,
         )
 
+    # Phase 7's attribution dashboard (D-01: regenerated alongside the
+    # daily report) -- same lazy-import + never-fail pattern as the paper
+    # section above: the ground-truth report must never fail to write
+    # because Phase 7's tables or modules are absent.
+    try:
+        from trader.data import db as trader_db
+        from trader.tournament import dashboard
+
+        dash_conn = trader_db.get_connection("data/trader.db")
+        try:
+            dash_paths = dashboard.write_dashboard(dash_conn)
+        finally:
+            dash_conn.close()
+        print(f"Attribution dashboard written to {dash_paths['html']}")
+    except Exception as error:
+        log.warning(
+            "Attribution dashboard regeneration failed (%s): %s",
+            type(error).__name__,
+            error,
+        )
+
     up_count = sum(1 for row in rows if (row["pct_return_same_day"] or 0) > 0)
     down_count = len(rows) - up_count if rows else 0
     print(f"Ground truth report written to {out_path}")

@@ -334,3 +334,43 @@ def test_ground_truth_report_main_appends_paper_section_on_success(tmp_path, mon
     assert "Ground Truth Daily Report" in content
     assert "## Paper Trading" in content
     assert "None this window" in content
+
+
+def test_ground_truth_report_main_regenerates_attribution_dashboard(
+    tmp_path, monkeypatch
+):
+    """Phase 7 D-01: the daily report run also regenerates the attribution
+    dashboard (reports/attribution/dashboard.{md,html})."""
+    from trader.ground_truth import report
+
+    monkeypatch.chdir(tmp_path)
+    _apply_phase5_schema("data/trader.db")
+
+    report.main(["--date", "2026-07-27"])
+
+    assert (tmp_path / "reports" / "attribution" / "dashboard.md").exists()
+    html = (tmp_path / "reports" / "attribution" / "dashboard.html").read_text(
+        encoding="utf-8"
+    )
+    assert _PROFILE_A in html
+
+
+def test_ground_truth_report_main_survives_dashboard_failure(tmp_path, monkeypatch):
+    """A dashboard crash must never stop the ground-truth report itself
+    (the same T-05-12 degrade contract as the paper section)."""
+    from trader.ground_truth import report
+    from trader.tournament import dashboard as real_dashboard
+
+    monkeypatch.chdir(tmp_path)
+    _apply_phase5_schema("data/trader.db")
+
+    def _boom(conn, base_dir="reports/attribution", as_of=None):
+        raise RuntimeError("simulated Phase 7 failure")
+
+    monkeypatch.setattr(real_dashboard, "write_dashboard", _boom)
+
+    report.main(["--date", "2026-07-27"])
+
+    out_path = tmp_path / "reports" / "2026-07-27.md"
+    assert out_path.exists()
+    assert "Ground Truth Daily Report" in out_path.read_text(encoding="utf-8")
