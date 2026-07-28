@@ -52,6 +52,42 @@ def paper_conn(tmp_path):
 
 
 @pytest.fixture
+def paper_trade_factory():
+    """Deterministic paper_trades row builder for tournament/attribution
+    tests (07-RESEARCH.md Wave 0 gap): insert one closed trade per pnl
+    value, exit dates one calendar day apart, so Sharpe/PF shapes are
+    controllable per test ("clearly promotable", "clearly demotable",
+    "borderline")."""
+    from datetime import date, timedelta
+
+    def _insert(conn, profile_name, pnls, start="2026-01-01", symbol="AAPL"):
+        start_date = date.fromisoformat(start)
+        for i, pnl in enumerate(pnls):
+            exit_day = (start_date + timedelta(days=i)).isoformat()
+            conn.execute(
+                """
+                INSERT INTO paper_trades
+                    (strategy_id, profile_name, symbol, venue, asset_class,
+                     entry_ts, entry_price, exit_ts, exit_price, exit_reason,
+                     qty, fees, slippage_cost, pnl, entry_order_ref, exit_order_ref)
+                VALUES (?, ?, ?, 'ibkr_paper', 'stock', ?, 100.0, ?, 100.0,
+                        'stop', 10, 1.0, 0.5, ?, 'entry_ref', 'exit_ref')
+                """,
+                (
+                    profile_name,
+                    profile_name,
+                    symbol,
+                    f"{exit_day}T09:30:00",
+                    f"{exit_day}T15:30:00",
+                    pnl,
+                ),
+            )
+        conn.commit()
+
+    return _insert
+
+
+@pytest.fixture
 def mock_yf_screen_result():
     """Shape of yfinance's yf.screen("day_gainers") response: {"quotes": [...]}."""
     quotes = [

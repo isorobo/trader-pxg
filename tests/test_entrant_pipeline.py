@@ -117,3 +117,240 @@ def test_step0_heal_never_applies_probation_multiplier(paper_conn, fake_ib, monk
     positions = ledger.get_open_positions(paper_conn)
     assert len(positions) == 1
     assert positions[0]["qty"] == 8  # verbatim -- never 8 * 0.25
+
+
+# ---------------------------------------------------------------------------
+# D-07 state machine (wave 3): candidate -> probation -> full -> retired
+# ---------------------------------------------------------------------------
+
+from datetime import datetime, timezone  # noqa: E402
+
+from trader.backtest.config import EXIT_PROFILE  # noqa: E402
+from trader.tournament import pipeline  # noqa: E402
+
+NOW = datetime(2026, 7, 28, 12, 0, tzinfo=timezone.utc)
+
+_ENTRANT_PROFILE = EXIT_PROFILE(
+    stop_pct=-0.1, tp_pct=0.2, scale_out=(), trailing_pct=None,
+    max_hold_days=None, eod_flat=False,
+)
+
+
+def _register(conn, name: str, strategy_id: str = "donchian_breakout") -> None:
+    pipeline.register_candidate(
+        conn, name, strategy_id, _ENTRANT_PROFILE,
+        pf_floor=0.9, max_dd_kill=-0.05, consecutive_loss_kill=8,
+        reason="owner-approved entrant (Strategys/10_donchian_breakout.md)",
+        now=NOW,
+    )
+
+
+def _stamp_all(conn, name: str) -> None:
+    pipeline.stamp_backtest(conn, name, run_id=101)
+    pipeline.stamp_oos(conn, name, "reports/backtests/oos_results_v3.json")
+
+
+def _retire_seeds(conn, count: int) -> None:
+    """Free roster slots by retiring seed incumbents (test-only poke)."""
+    names = [c.profile_name for c in config_store.get_live_configs(conn)][:count]
+    for name in names:
+        conn.execute(
+            "UPDATE strategy_registry SET state = 'retired' WHERE profile_name = ?",
+            (name,),
+        )
+    conn.commit()
+
+
+def test_register_candidate_creates_row_and_transition(paper_conn):
+    _register(paper_conn, "donchian_v1")
+
+    row = paper_conn.execute(
+        "SELECT state, backtest_run_id, oos_result_ref FROM strategy_registry "
+        "WHERE profile_name = 'donchian_v1'"
+    ).fetchone()
+    assert row == ("candidate", None, None)
+
+    transition = paper_conn.execute(
+        "SELECT from_state, to_state FROM strategy_registry_transitions "
+        "WHERE profile_name = 'donchian_v1'"
+    ).fetchone()
+    assert transition == (None, "candidate")
+
+
+def test_duplicate_registration_rejected(paper_conn):
+    _register(paper_conn, "donchian_v1")
+    with pytest.raises(ValueError, match="already registered"):
+        _register(paper_conn, "donchian_v1")
+
+
+def test_candidate_never_appears_in_live_configs(paper_conn):
+    _register(paper_conn, "donchian_v1")
+    names = {c.profile_name for c in config_store.get_live_configs(paper_conn)}
+    assert "donchian_v1" not in names
+
+
+def test_promotion_without_evidence_raises(paper_conn):
+    _register(paper_conn, "donchian_v1")
+    _retire_seeds(paper_conn, 1)
+
+    with pytest.raises(pipeline.MissingEvidence, match="backtest_run_id"):
+        pipeline.promote_to_probation(paper_conn, "donchian_v1", now=NOW)
+
+    pipeline.stamp_backtest(paper_conn, "donchian_v1", run_id=101)
+    with pytest.raises(pipeline.MissingEvidence, match="oos_result_ref"):
+        pipeline.promote_to_probation(paper_conn, "donchian_v1", now=NOW)
+
+
+def test_full_evidence_promotes_to_probation_and_goes_live(paper_conn):
+    _register(paper_conn, "donchian_v1")
+    _stamp_all(paper_conn, "donchian_v1")
+    _retire_seeds(paper_conn, 1)
+
+    pipeline.promote_to_probation(paper_conn, "donchian_v1", now=NOW)
+
+    live = config_store.get_live_configs_by_profile_name(paper_conn)
+    assert live["donchian_v1"].state == "probation"
+
+
+def test_evidence_stamps_are_write_once(paper_conn):
+    _register(paper_conn, "donchian_v1")
+    pipeline.stamp_backtest(paper_conn, "donchian_v1", run_id=101)
+    pipeline.stamp_backtest(paper_conn, "donchian_v1", run_id=101)  # idempotent
+
+    with pytest.raises(ValueError, match="write-once"):
+        pipeline.stamp_backtest(paper_conn, "donchian_v1", run_id=999)
+
+
+def test_promote_to_full_requires_paper_30_stamp(paper_conn):
+    _register(paper_conn, "donchian_v1")
+    _stamp_all(paper_conn, "donchian_v1")
+    _retire_seeds(paper_conn, 1)
+    pipeline.promote_to_probation(paper_conn, "donchian_v1", now=NOW)
+
+    with pytest.raises(pipeline.MissingEvidence, match="paper_30"):
+        pipeline.promote_to_full(paper_conn, "donchian_v1", sharpe=1.5, now=NOW)
+
+
+def test_confirm_paper_30_stamps_only_at_thirty_trades(paper_conn, paper_trade_factory):
+    _register(paper_conn, "donchian_v1")
+    paper_trade_factory(paper_conn, "donchian_v1", [10.0] * 29)
+    assert pipeline.confirm_paper_30(paper_conn, "donchian_v1", now=NOW) is False
+
+    paper_trade_factory(paper_conn, "donchian_v1", [10.0], start="2026-02-01")
+    assert pipeline.confirm_paper_30(paper_conn, "donchian_v1", now=NOW) is True
+
+    row = paper_conn.execute(
+        "SELECT paper_30_confirmed_at FROM strategy_registry WHERE profile_name = 'donchian_v1'"
+    ).fetchone()
+    assert row[0] is not None
+
+
+def test_full_promotion_path_end_to_end(paper_conn, paper_trade_factory):
+    _register(paper_conn, "donchian_v1")
+    _stamp_all(paper_conn, "donchian_v1")
+    _retire_seeds(paper_conn, 1)
+    pipeline.promote_to_probation(paper_conn, "donchian_v1", now=NOW)
+    paper_trade_factory(paper_conn, "donchian_v1", [10.0] * 30)
+    assert pipeline.confirm_paper_30(paper_conn, "donchian_v1", now=NOW) is True
+
+    pipeline.promote_to_full(paper_conn, "donchian_v1", sharpe=0.8, now=NOW)
+
+    assert config_store.get_live_configs_by_profile_name(paper_conn)[
+        "donchian_v1"
+    ].state == "full"
+
+
+def test_promote_to_full_below_floor_rejected(paper_conn, paper_trade_factory):
+    _register(paper_conn, "donchian_v1")
+    _stamp_all(paper_conn, "donchian_v1")
+    _retire_seeds(paper_conn, 1)
+    pipeline.promote_to_probation(paper_conn, "donchian_v1", now=NOW)
+    paper_trade_factory(paper_conn, "donchian_v1", [10.0] * 30)
+    pipeline.confirm_paper_30(paper_conn, "donchian_v1", now=NOW)
+
+    with pytest.raises(ValueError, match="promotion floor"):
+        pipeline.promote_to_full(paper_conn, "donchian_v1", sharpe=-0.2, now=NOW)
+
+
+def test_retire_is_terminal_and_writes_kill_state(paper_conn):
+    _register(paper_conn, "donchian_v1")
+    _stamp_all(paper_conn, "donchian_v1")
+    _retire_seeds(paper_conn, 1)
+    pipeline.promote_to_probation(paper_conn, "donchian_v1", now=NOW)
+
+    pipeline.retire(
+        paper_conn, "donchian_v1", "D-04 demotion: sustained bottom rank",
+        trigger_value=-0.9, now=NOW,
+    )
+
+    assert ledger.is_strategy_retired(paper_conn, "donchian_v1") is True
+    kill_row = paper_conn.execute(
+        "SELECT reason FROM strategy_kill_state WHERE strategy_id = 'donchian_v1'"
+    ).fetchone()
+    assert kill_row[0] == "tournament_demotion"
+
+    with pytest.raises(pipeline.TerminalState):
+        pipeline.promote_to_probation(paper_conn, "donchian_v1", now=NOW)
+    with pytest.raises(ValueError, match="already registered"):
+        _register(paper_conn, "donchian_v1")
+
+
+def test_active_cap_queues_seventh_entrant(paper_conn):
+    """5 seeds + 1 admitted = 6 active (the cap); the next candidate stays
+    queued."""
+    for name in ("donchian_v1", "rsi2_v1"):
+        _register(paper_conn, name)
+        _stamp_all(paper_conn, name)
+
+    pipeline.promote_to_probation(paper_conn, "donchian_v1", now=NOW)
+    assert pipeline.active_count(paper_conn) == 6
+
+    with pytest.raises(pipeline.CapExceeded, match="roster is full"):
+        pipeline.promote_to_probation(paper_conn, "rsi2_v1", now=NOW)
+    row = paper_conn.execute(
+        "SELECT state FROM strategy_registry WHERE profile_name = 'rsi2_v1'"
+    ).fetchone()
+    assert row[0] == "candidate"  # queued, not lost
+
+
+def test_quarterly_entrant_cap(paper_conn):
+    """Room on the roster, but only 2 admissions per calendar quarter."""
+    _retire_seeds(paper_conn, 3)
+    for name in ("donchian_v1", "rsi2_v1", "tsmom_v1"):
+        _register(paper_conn, name)
+        _stamp_all(paper_conn, name)
+
+    pipeline.promote_to_probation(paper_conn, "donchian_v1", now=NOW)
+    pipeline.promote_to_probation(paper_conn, "rsi2_v1", now=NOW)
+
+    with pytest.raises(pipeline.CapExceeded, match="quarterly entrant cap"):
+        pipeline.promote_to_probation(paper_conn, "tsmom_v1", now=NOW)
+
+    # A new quarter resets the count.
+    next_quarter = datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
+    pipeline.promote_to_probation(paper_conn, "tsmom_v1", now=next_quarter)
+    assert config_store.get_live_configs_by_profile_name(paper_conn)[
+        "tsmom_v1"
+    ].state == "probation"
+
+
+def test_every_transition_appends_audit_row(paper_conn, paper_trade_factory):
+    _register(paper_conn, "donchian_v1")
+    _stamp_all(paper_conn, "donchian_v1")
+    _retire_seeds(paper_conn, 1)
+    pipeline.promote_to_probation(paper_conn, "donchian_v1", now=NOW)
+    paper_trade_factory(paper_conn, "donchian_v1", [10.0] * 30)
+    pipeline.confirm_paper_30(paper_conn, "donchian_v1", now=NOW)
+    pipeline.promote_to_full(paper_conn, "donchian_v1", sharpe=0.8, now=NOW)
+    pipeline.retire(paper_conn, "donchian_v1", "kill trip", -0.9, now=NOW)
+
+    rows = paper_conn.execute(
+        "SELECT from_state, to_state FROM strategy_registry_transitions "
+        "WHERE profile_name = 'donchian_v1' ORDER BY transition_id"
+    ).fetchall()
+    assert rows == [
+        (None, "candidate"),
+        ("candidate", "probation"),
+        ("probation", "full"),
+        ("full", "retired"),
+    ]
