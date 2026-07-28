@@ -42,8 +42,29 @@ def main(argv: list[str] | None = None) -> None:
     try:
         summary = judge.run_tournament_once(conn)
         paths = dashboard.write_dashboard(conn)
+
+        # Phase 6 (06-01-PLAN.md D-05): the weekly graduation review runs in
+        # this same scheduled invocation -- one task, no extra schtasks
+        # line. Never-fail: a graduation crash must not mask a completed
+        # tournament run.
+        graduation_summary = None
+        try:
+            from trader.graduation import evaluator as graduation_evaluator
+
+            graduation = graduation_evaluator.run_graduation_review(conn)
+            graduation_summary = {
+                "passed": graduation["passed"],
+                "report": graduation["report_path"],
+            }
+        except Exception as error:
+            print(
+                f"graduation review failed ({type(error).__name__}): {error}",
+                file=sys.stderr,
+            )
+
         print({"tournament": summary["counts"], "run_id": summary["run_id"],
-               "report": summary["report_path"], "dashboard": paths})
+               "report": summary["report_path"], "dashboard": paths,
+               "graduation": graduation_summary})
     finally:
         conn.close()
 
