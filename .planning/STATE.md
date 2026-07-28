@@ -12,9 +12,14 @@ See: .planning/PROJECT.md (updated 25 July 2026)
 Phase: 7 of 0–10 (Attribution & Tournament) — BUILT, owner audit pending
 Plan: Phase 7 executed 2026-07-28 (plans 07-01/07-02, waves 1–6, 572 tests green). Registry-backed live configs (D-08), D-07 entrant pipeline, weekly judge with frozen rules (hash d5df6e82...), attribution dashboards, weekly scheduler artifacts (registration deferred to 05-09 batch)
 Status: Phases 2-4 closed; Phase 5 built (511→572 tests). Ops checkpoint: Telegram VERIFIED (2026-07-27); IBKR account APPROVED (2026-07-28, portal greets "Katherine Gaines" — owner to confirm number matches U27412777), next: fund → create paper user (~24h provisioning) → Gateway Paper Log In on 4002 → run one entry+guardian pass to close 05-08. Phase 0 monitoring to 2026-08-09. Phase 7 exit gate: owner audit of reports/tournament/fixture-demo/2026-07-28-run1.md + frozen-threshold review (floors 0.0/0.0, K=4 — one sanctioned adjustment allowed before first real run)
-Last activity: 2026-07-28 — Phase 7 built. BUG FIX: guardian kill conditions keyed on family strategy_id (matched zero trades, could never trip); now keyed on profile_name. Test suite no longer sends real Telegram messages (conftest guard)
+Last activity: 2026-07-29 — Autonomous work session (owner directive: everything possible without the Gateway):
+- Phase 6 BUILD half done: graduation evaluator (5 frozen checks, hash-gated, advisory verdicts) folded into the weekly tournament invocation; migration 0007; 06-CONTEXT/06-01-PLAN written. Runtime half awaits 05-08
+- Donchian entrant (Strategys/10) built up to the Phase 8 gate: frozen sys1/sys2 variants, evidence driver (sweep_id=donchian_v1, 1,080 tune runs + OOS, checkpoint-resumable), human-only register CLI requiring --i-confirm-phase6-graduated. Evidence sweep launched 2026-07-29
+- D-01 gap closed: daily report now regenerates the attribution dashboard (never-fail)
+- Phase 0 poller: task healthy (result 0, 15-min repeat); low daily poll counts are machine-uptime gaps, not a poller fault
+- GitHub remote: blocked, no gh CLI installed. Owner action: flip trader-pxg private in the web UI, then git remote add origin <url> && git push -u origin master
 
-Progress: [██████░░░░] 62%
+Progress: [██████░░░░] 64%
 
 ## Performance Metrics
 
