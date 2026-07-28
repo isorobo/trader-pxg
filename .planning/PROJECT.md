@@ -12,16 +12,15 @@ The system never lies to itself: every strategy must prove its edge on honest da
 
 ### Validated
 
-(None yet — ship to validate)
+- ✓ Phase 2 — Backtest harness with point-in-time data, fee and slippage models, and sanity tests (verified passed 2026-07-26)
+- ✓ Phase 3 — Strategy lab: honest v1 zero-survivor cycle, pre-registered v2 → 5 OOS survivors with kill conditions (verified passed 2026-07-26)
+- ✓ Phase 4 — Risk gate, position sizer, and circuit breakers, property-tested (verified passed 2026-07-26)
 
 ### Active
 
-- [ ] Phase 0 — Snapshot logger records what "+400% gainers" resolve to, with daily close reports
-- [ ] Phase 1 — Accounts, API access, repo, and data plumbing sorted
-- [ ] Phase 2 — Backtest harness with point-in-time data, fee and slippage models, and sanity tests
-- [ ] Phase 3 — Strategy lab with out-of-sample validation and pre-registered kill conditions
-- [ ] Phase 4 — Risk gate, position sizer, and circuit breakers with unit tests
-- [ ] Phase 5 — Full paper trading loop running unattended overnight
+- [ ] Phase 0 — Snapshot logger records what "+400% gainers" resolve to (LIVE, collecting; two-week gate 2026-08-09)
+- [ ] Phase 1 — Accounts, API access, repo, and data plumbing (code verified; account approvals in progress)
+- [ ] Phase 5 — Paper trading loop (built, 511 tests; awaiting IBKR paper user for go-live)
 - [ ] Phase 6 — Data collection and graduation review against pre-registered criteria
 - [ ] Phase 7 — Attribution and tournament layer
 - [ ] Phase 8 — Optional signal expansion (only if Phase 6 graduates a strategy)
