@@ -11,7 +11,7 @@ See: .planning/PROJECT.md (updated 25 July 2026)
 
 Phase: 7 of 0–10 (Attribution & Tournament) — BUILT, owner audit pending
 Plan: Phase 7 executed 2026-07-28 (plans 07-01/07-02, waves 1–6, 572 tests green). Registry-backed live configs (D-08), D-07 entrant pipeline, weekly judge with frozen rules (hash d5df6e82...), attribution dashboards, weekly scheduler artifacts (registration deferred to 05-09 batch)
-Status: Phases 2-4 closed; Phase 5 built (511→572 tests). Ops checkpoint: Telegram VERIFIED (2026-07-27); Gateway awaiting IBKR approval (U27412777). Phase 0 monitoring to 2026-08-09. Phase 7 exit gate: owner audit of reports/tournament/fixture-demo/2026-07-28-run1.md + frozen-threshold review (floors 0.0/0.0, K=4 — one sanctioned adjustment allowed before first real run)
+Status: Phases 2-4 closed; Phase 5 built (511→572 tests). Ops checkpoint: Telegram VERIFIED (2026-07-27); IBKR account APPROVED (2026-07-28, portal greets "Katherine Gaines" — owner to confirm number matches U27412777), next: fund → create paper user (~24h provisioning) → Gateway Paper Log In on 4002 → run one entry+guardian pass to close 05-08. Phase 0 monitoring to 2026-08-09. Phase 7 exit gate: owner audit of reports/tournament/fixture-demo/2026-07-28-run1.md + frozen-threshold review (floors 0.0/0.0, K=4 — one sanctioned adjustment allowed before first real run)
 Last activity: 2026-07-28 — Phase 7 built. BUG FIX: guardian kill conditions keyed on family strategy_id (matched zero trades, could never trip); now keyed on profile_name. Test suite no longer sends real Telegram messages (conftest guard)
 
 Progress: [██████░░░░] 62%
