@@ -414,8 +414,12 @@ def run_tournament_once(
     counts = {kind: 0 for kind in ("promote", "retire", "hold", "enter")}
     for d in decisions:
         counts[d["decision"]] += 1
+    # entry_type 'scheduled_run' -- ops_log validates against its frozen
+    # six-type vocabulary, and the weekly tournament IS a scheduled run
+    # (caught by the real .bat dry-run 2026-07-29; tests mock notify and
+    # cannot see ops_log's whitelist).
     alerts.notify(
-        "tournament",
+        "scheduled_run",
         f"tournament run {run_id}: {counts['promote']} promoted, "
         f"{counts['retire']} retired, {counts['enter']} entered, "
         f"{counts['hold']} held; roster changed={hash_before != hash_after}; "

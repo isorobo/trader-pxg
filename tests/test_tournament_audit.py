@@ -143,7 +143,10 @@ def test_telegram_summary_sent_once_per_run(
 
     assert _mock_alerts.call_count == 1
     entry_type, message = _mock_alerts.call_args.args
-    assert entry_type == "tournament"
+    # 'scheduled_run' is ops_log's vocabulary for scheduled processes --
+    # 'tournament' is NOT in its frozen whitelist (real-run regression,
+    # caught by the .bat dry-run 2026-07-29).
+    assert entry_type == "scheduled_run"
     assert "tournament run" in message
     assert "report" in message
 
