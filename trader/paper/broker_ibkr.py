@@ -25,7 +25,20 @@ directly (this module is the single seam).
 
 from __future__ import annotations
 
+import inspect
+import logging
+
 from trader.paper import config
+
+log = logging.getLogger(__name__)
+
+# Bounded wait for the open-orders sync inside snapshot(). Discovered on
+# the first real-Gateway session (05-08 checkpoint, 2026-07-30): a freshly
+# provisioned paper account can fail to send openOrderEnd, and ib_async's
+# synchronous reqOpenOrders() then waits on it FOREVER. An unattended
+# system must degrade to session-cached order state instead of hanging --
+# a missed heal on one tick is retried next tick; a hung guardian is not.
+ORDER_SYNC_TIMEOUT_S = 15.0
 
 
 def round_shares_down(dollar_amount: float, price: float) -> int:
@@ -105,6 +118,36 @@ class IBKRBrokerAdapter:
             "status": "submitted",
         }
 
+    def _request_open_orders_bounded(self) -> None:
+        """reqOpenOrders with a hard ORDER_SYNC_TIMEOUT_S cap.
+
+        Takes the bounded-async path only when the client's
+        reqOpenOrdersAsync() returns a REAL coroutine (the live ib_async
+        client); test fakes (MagicMocks or plain fakes) fall through to the
+        plain synchronous reqOpenOrders() call they already implement. On
+        timeout, degrades to session-cached order state with a warning --
+        never a hang (2026-07-30 real-Gateway regression).
+        """
+        maybe_coro = None
+        async_fn = getattr(self._ib_client, "reqOpenOrdersAsync", None)
+        if async_fn is not None:
+            maybe_coro = async_fn()
+        if inspect.iscoroutine(maybe_coro):
+            import asyncio
+
+            from ib_async import util
+
+            try:
+                util.run(asyncio.wait_for(maybe_coro, timeout=ORDER_SYNC_TIMEOUT_S))
+            except (TimeoutError, asyncio.TimeoutError):
+                log.warning(
+                    "reqOpenOrders timed out after %.0fs -- proceeding with "
+                    "session-cached order state (heals retry next tick)",
+                    ORDER_SYNC_TIMEOUT_S,
+                )
+        else:
+            self._ib_client.reqOpenOrders()
+
     def snapshot(self) -> dict:
         """Fetch positions/open_orders/fills from the broker.
 
@@ -112,7 +155,7 @@ class IBKRBrokerAdapter:
         current session state, matching 05-RESEARCH.md Pattern 1's
         pre-submit dual-check convention.
         """
-        self._ib_client.reqOpenOrders()
+        self._request_open_orders_bounded()
         positions = self._ib_client.positions()
         open_orders = self._ib_client.openTrades()
         fills = self._ib_client.fills()

@@ -517,8 +517,13 @@ def main(argv: list[str] | None = None) -> None:
     try:
         ibkr_adapter = IBKRBrokerAdapter()
         ibkr_adapter.connect()
-        summary = run_entry_pipeline_once(conn, ibkr_adapter)
-        print(summary)
+        try:
+            summary = run_entry_pipeline_once(conn, ibkr_adapter)
+            print(summary)
+        finally:
+            # Explicit disconnect so the live socket never keeps the
+            # interpreter alive after the --once pass (2026-07-30).
+            ibkr_adapter.disconnect()
     finally:
         conn.close()
 

@@ -142,6 +142,42 @@ def test_snapshot_empty_when_fake_ib_returns_nothing(fake_ib):
     assert result == {"positions": {}, "open_orders": [], "fills": []}
 
 
+def test_snapshot_order_sync_never_hangs_on_missing_open_order_end(monkeypatch):
+    """2026-07-30 real-Gateway regression: a fresh paper account can never
+    send openOrderEnd, and ib_async's synchronous reqOpenOrders() then
+    waits forever. The bounded path must time out and degrade to
+    session-cached order state instead of hanging the unattended loop."""
+    import asyncio
+    import time
+
+    from trader.paper import broker_ibkr
+
+    class _HangingClient:
+        def reqOpenOrdersAsync(self):
+            return asyncio.sleep(999)
+
+        def positions(self):
+            return []
+
+        def openTrades(self):
+            return []
+
+        def fills(self):
+            return []
+
+    monkeypatch.setattr(broker_ibkr, "ORDER_SYNC_TIMEOUT_S", 0.2)
+    adapter = IBKRBrokerAdapter(
+        host="127.0.0.1", port=4002, client_id=5, ib_client=_HangingClient()
+    )
+
+    start = time.monotonic()
+    result = adapter.snapshot()
+    elapsed = time.monotonic() - start
+
+    assert elapsed < 5.0, f"snapshot took {elapsed:.1f}s -- the cap did not bind"
+    assert result == {"positions": {}, "open_orders": [], "fills": []}
+
+
 # ---------------------------------------------------------------------------
 # latest_price -- delayed-data lookup (Pitfall 4)
 # ---------------------------------------------------------------------------

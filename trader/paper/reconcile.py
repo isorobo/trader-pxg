@@ -219,8 +219,21 @@ def main(argv: list[str] | None = None) -> None:
     conn = db.get_connection(args.db_path)
     try:
         ibkr_adapter = IBKRBrokerAdapter()
-        summary = run_reconcile_once(conn, ibkr_adapter)
-        print(summary)
+        # connect() was missing until the first real-Gateway run (05-08
+        # checkpoint, 2026-07-30) -- snapshot() dereferences the lazily
+        # created ib client, so an unconnected adapter crashed with
+        # AttributeError: 'NoneType' has no attribute 'reqOpenOrders'.
+        # entry_pipeline/guardian mains always connected; this one did not.
+        ibkr_adapter.connect()
+        try:
+            summary = run_reconcile_once(conn, ibkr_adapter)
+            print(summary)
+        finally:
+            # Without an explicit disconnect the live ib_async socket can
+            # keep the interpreter alive after main() returns (observed on
+            # the first real-Gateway run, 2026-07-30) -- fakes never showed
+            # this because they hold no socket.
+            ibkr_adapter.disconnect()
     finally:
         conn.close()
 

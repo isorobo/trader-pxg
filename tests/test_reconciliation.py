@@ -430,7 +430,20 @@ def test_reconcile_main_runs_once_and_prints_summary(tmp_path, capsys, monkeypat
     db_path = str(tmp_path / "trader.db")
 
     class _FakeAdapter:
+        def __init__(self):
+            self.connected = False
+
+        def connect(self):
+            self.connected = True
+
+        def disconnect(self):
+            self.connected = False
+
         def snapshot(self):
+            # Real-Gateway regression (2026-07-30): snapshot() dereferences
+            # the ib client, which only exists after connect() -- main()
+            # forgot to call it and every fake silently tolerated that.
+            assert self.connected, "main() must call connect() before snapshot()"
             return {"positions": {}, "open_orders": [], "fills": []}
 
     monkeypatch.setattr(reconcile, "IBKRBrokerAdapter", lambda *a, **k: _FakeAdapter())
