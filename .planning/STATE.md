@@ -25,6 +25,14 @@ Last activity: 2026-07-29 — Autonomous work session (owner directive: everythi
 - 05-08 OPS CHECKPOINT CLOSED (2026-07-30): live verification passed — reconcile 0 divergences/no halt; entry pipeline 0 candidates (honest zero, no signal); guardian 0 positions. Three real-Gateway bugs found+fixed at the checkpoint (missing connect() in reconcile.main; no disconnect in any CLI main; unbounded reqOpenOrders hang on fresh paper accounts — now 15s-bounded). ALL FIVE scheduled tasks registered and Ready: GroundTruthPoll, PaperEntry (01:45), PaperGuardian (5-min), PaperReconcile (1-min), AITournament (Sun 15:00). THE SYSTEM NOW TRADES PAPER UNATTENDED; the Phase 6 graduation clock starts at the first live-paper fill
 - Note for owner: paper account holds NZD 1,000,000; sizing uses the frozen PAPER_ACCOUNT_EQUITY=100,000 constant — deliberately conservative, weights are computed against 100k regardless of broker equity. Revisit only as a deliberate decision, never mid-flight
 
+2026-07-30 (late session, owner directive: full-auto, "use a mix of all of them"):
+- MULTI-SIGNAL LIVE BOOK: each live family scans its OWN frozen signal (signals.py routing, migration 0008 entry_variant, sorted-family dedupe, within-family profile assignment). 621→631 tests
+- ENTRANTS ADMITTED per frozen rules: Donchian sys1 choppy (OOS PF 11.9) → PROBATION at 25% size (run 3 'enter' decision, roster at cap 6); RSI-2 connors5 (OOS PF 4.6) → QUEUED candidate, first in line when a retirement opens a slot. Owner approval quoted verbatim in the transition audit trail
+- Donchian CRYPTO/MEMECOIN evidence: 2,520 tune + 10 OOS runs — ZERO survivors (PF 0.56-0.74 OOS, all killed). Honest result; no crypto entrant queued
+- MA-crossover entrant built (20/50 EMA + 50/200 SMA cross events, frozen+gated); 3,600-run all-bucket evidence sweep launched 2026-07-30 late — results to be read next session if not this one
+- Crypto paper-leg: PLAN drafted (.planning/phases/08-signal-expansion/CRYPTO-PAPER-LEG-PLAN.md), deliberately NOT armed — no crypto survivor exists and arming a second live leg unreviewed violates standing rule 5. Owner reviews before build
+- Elimination cadence unchanged and pre-registered: kills immediate (guardian), sustained-worst full-state demotion after 4 consecutive weekly evals, graduation checklist at 50 trades. NOT re-tuned to "2 months" — standing rule 1
+
 Progress: [██████░░░░] 64%
 
 ## Performance Metrics
