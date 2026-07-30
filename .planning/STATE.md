@@ -21,7 +21,9 @@ Last activity: 2026-07-29 — Autonomous work session (owner directive: everythi
 - Weekly tournament task REGISTERED ("TraderAITournament", Sunday 15:00 NZ) and dry-run verified end to end against the real DB (runs 1-2: 5 holds, dashboard + graduation report + Telegram). Dry run caught+fixed a real bug: ops_log rejected entry_type 'tournament' (now 'scheduled_run')
 - RSI-2 entrant (Strategys/11) evidence COMPLETE 2026-07-29: 1,080 tune + 10 OOS runs, FIVE OOS SURVIVORS (all choppy_v2, hold30, PF 4.0-4.6, Sharpe 3.0-3.3, n=75); trending_v2 all insufficient_sample (8-12 trades). Payloads in reports/backtests/rsi2_evidence.json, same Phase 8 gate
 - TS-momentum (Strategys/12) deferred with reasoning (see Deferred Items)
-- IBKR: account U27412777 FUNDED (2026-07-30, NZD 0.62 settled, "fund your account" checkmark green). Next: create paper trading user in Client Portal, then Gateway on 4002
+- IBKR: account U27412777 FUNDED; paper user DUR380571 created (NZD 1,000,000 simulated) and Gateway LIVE on 4002
+- 05-08 OPS CHECKPOINT CLOSED (2026-07-30): live verification passed — reconcile 0 divergences/no halt; entry pipeline 0 candidates (honest zero, no signal); guardian 0 positions. Three real-Gateway bugs found+fixed at the checkpoint (missing connect() in reconcile.main; no disconnect in any CLI main; unbounded reqOpenOrders hang on fresh paper accounts — now 15s-bounded). ALL FIVE scheduled tasks registered and Ready: GroundTruthPoll, PaperEntry (01:45), PaperGuardian (5-min), PaperReconcile (1-min), AITournament (Sun 15:00). THE SYSTEM NOW TRADES PAPER UNATTENDED; the Phase 6 graduation clock starts at the first live-paper fill
+- Note for owner: paper account holds NZD 1,000,000; sizing uses the frozen PAPER_ACCOUNT_EQUITY=100,000 constant — deliberately conservative, weights are computed against 100k regardless of broker equity. Revisit only as a deliberate decision, never mid-flight
 
 Progress: [██████░░░░] 64%
 
