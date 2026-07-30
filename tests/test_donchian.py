@@ -149,6 +149,34 @@ def test_evidence_driver_verifies_donchian_gate_before_any_work(monkeypatch):
         run_donchian_evidence.main(conn=object())
 
 
+def test_crypto_expected_tune_run_count_matches_real_grid_and_regimes():
+    from trader.backtest import exit_grid, regimes_v2, universe
+    from trader.backtest.run_donchian_crypto_evidence import (
+        CRYPTO_BUCKETS,
+        EXPECTED_TUNE_RUN_COUNT_DONCHIAN_CRYPTO,
+    )
+
+    expected = 0
+    for bucket in CRYPTO_BUCKETS:
+        regimes = [r for r in regimes_v2.REGIMES_V2 if r.bucket == bucket]
+        grid_size = len(list(exit_grid.exit_profile_grid(bucket)))
+        expected += len(donchian.DONCHIAN_VARIANTS) * len(regimes) * grid_size
+    assert expected == EXPECTED_TUNE_RUN_COUNT_DONCHIAN_CRYPTO
+
+
+def test_crypto_evidence_driver_verifies_gate_before_any_work(monkeypatch):
+    from trader.backtest import run_donchian_crypto_evidence
+
+    monkeypatch.setattr(
+        run_donchian_crypto_evidence,
+        "verify_frozen_donchian",
+        lambda: (_ for _ in ()).throw(RuntimeError("integrity check failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="integrity check failed"):
+        run_donchian_crypto_evidence.main(conn=object())
+
+
 # ---------------------------------------------------------------------------
 # The Phase 8 gate on registration
 # ---------------------------------------------------------------------------
