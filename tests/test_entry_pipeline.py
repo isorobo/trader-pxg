@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import inspect
 import re
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -253,6 +253,110 @@ def test_live_profile_names_excludes_only_retired_configs(paper_conn):
 
     assert retired_name not in names
     assert len(names) == len(_LIVE_PROFILE_NAMES) - 1
+
+
+# ---------------------------------------------------------------------------
+# Multi-signal book (owner-approved 2026-07-30): per-family scans + routing
+# ---------------------------------------------------------------------------
+
+
+def _insert_live_registry_row(
+    conn, profile_name: str, strategy_id: str, entry_variant: str,
+    state: str = "probation",
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO strategy_registry
+            (profile_name, strategy_id, stop_pct, tp_pct, scale_out_json,
+             trailing_pct, max_hold_days, eod_flat, pf_floor, max_dd_kill,
+             consecutive_loss_kill, entered_at, state, state_changed_at,
+             entry_variant)
+        VALUES (?, ?, -0.2, 0.2, '[]', NULL, 30, 0, 0.9, -0.05, 8,
+                datetime('now'), ?, datetime('now'), ?)
+        """,
+        (profile_name, strategy_id, state, entry_variant),
+    )
+    conn.commit()
+
+
+def test_scan_candidates_tags_every_candidate_with_its_family(paper_conn, monkeypatch):
+    _patch_bars(monkeypatch, {"AAPL": _rising_bars_df()})
+
+    candidates = entry_pipeline.scan_candidates(paper_conn, TRADING_DAY)
+
+    assert [c["family"] for c in candidates] == ["momentum_stock"]
+
+
+def test_scan_candidates_scans_each_live_familys_own_signal(paper_conn, monkeypatch):
+    """With a donchian_stock row live, a symbol satisfying ONLY the
+    Donchian 20-day-high break (flat highs, no volume surge for momentum)
+    becomes a donchian-family candidate."""
+    _insert_live_registry_row(paper_conn, "donchian_probe", "donchian_stock", "sys1")
+
+    periods = 40
+    dates = pd.bdate_range(end=str(TRADING_DAY - timedelta(days=1)), periods=periods, tz="UTC")
+    closes = [95.0 + (0.3 if i % 2 else -0.3) for i in range(periods - 1)] + [101.0]
+    donchian_bars = pd.DataFrame(
+        {
+            "open": closes,
+            "high": [100.0] * (periods - 1) + [101.5],
+            "low": [c - 1.0 for c in closes],
+            "close": closes,
+            "volume": [1_000_000.0] * periods,
+        },
+        index=dates,
+    )
+    _patch_bars(monkeypatch, {"MSFT": donchian_bars})
+
+    candidates = entry_pipeline.scan_candidates(paper_conn, TRADING_DAY)
+
+    assert len(candidates) == 1
+    assert candidates[0]["symbol"] == "MSFT"
+    assert candidates[0]["family"] == "donchian_stock"
+    assert candidates[0]["volatility"] > 0
+
+
+def test_scan_candidates_dedupes_symbol_claimed_by_first_family(paper_conn, monkeypatch):
+    """A symbol firing BOTH live families yields exactly ONE candidate,
+    claimed by the first family in sorted strategy_id order (the
+    pre-registered dedupe rule: 'donchian_stock' < 'momentum_stock')."""
+    _insert_live_registry_row(paper_conn, "donchian_probe", "donchian_stock", "sys1")
+    _patch_bars(monkeypatch, {"AAPL": _rising_bars_df()})
+
+    candidates = entry_pipeline.scan_candidates(paper_conn, TRADING_DAY)
+
+    assert len(candidates) == 1
+    assert candidates[0]["symbol"] == "AAPL"
+    assert candidates[0]["family"] == "donchian_stock"
+
+
+def test_full_run_routes_candidate_to_its_own_familys_profile(
+    paper_conn, fake_ib, monkeypatch
+):
+    """End to end: a donchian-family candidate's order and position are
+    recorded under the donchian profile, never a momentum one -- and its
+    probation state sizes at the frozen 25% multiplier."""
+    _insert_live_registry_row(paper_conn, "donchian_probe", "donchian_stock", "sys1")
+    _patch_bars(monkeypatch, {"AAPL": _rising_bars_df()})
+    fake_ib.placeOrder.return_value.order.permId = 777
+    adapter = _ibkr_adapter(fake_ib)
+
+    result = entry_pipeline.run_entry_pipeline_once(
+        paper_conn, adapter, as_of_date=TRADING_DAY
+    )
+
+    assert len(result["submitted"]) == 1
+    order = ledger.get_order_by_ref(paper_conn, result["submitted"][0])
+    assert order["strategy_id"] == "donchian_probe"
+
+    # Probation sizing: the sizer's 0.50 single-position cap binds first,
+    # then the frozen 25% probation multiplier applies to the dollar
+    # amount -- 0.50 * 0.25 = 0.125 of equity.
+    price = 100.0 * (1.01 ** 34)
+    expected_qty = entry_pipeline.broker_ibkr.round_shares_down(
+        0.50 * 0.25 * paper_config.PAPER_ACCOUNT_EQUITY, price
+    )
+    assert order["qty"] == expected_qty
 
 
 # ---------------------------------------------------------------------------
@@ -507,7 +611,7 @@ def test_exactly_one_place_order_call_site():
 def test_assign_exit_profile_call_site_has_exactly_two_positional_args():
     call_sites = re.findall(r"= assign_exit_profile\(([^)]*)\)", _source())
     assert len(call_sites) == 1
-    args = [a.strip() for a in call_sites[0].split(",")]
+    args = [a.strip() for a in call_sites[0].split(",") if a.strip()]
     assert len(args) == 2
 
 

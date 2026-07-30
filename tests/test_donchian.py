@@ -207,7 +207,7 @@ def _evidence_file(tmp_path) -> str:
     return str(path)
 
 
-def test_register_entrant_refuses_without_gate_flag(tmp_path, capsys):
+def test_register_entrant_refuses_without_owner_approval(tmp_path, capsys):
     from trader.tournament import register_entrant
 
     with pytest.raises(SystemExit) as excinfo:
@@ -216,7 +216,7 @@ def test_register_entrant_refuses_without_gate_flag(tmp_path, capsys):
         )
 
     assert excinfo.value.code == 2
-    assert "Phase 6" in capsys.readouterr().err
+    assert "human-approved" in capsys.readouterr().err
 
 
 def test_register_entrant_registers_with_gate_flag(tmp_path, paper_conn, monkeypatch):
@@ -244,15 +244,20 @@ def test_register_entrant_registers_with_gate_flag(tmp_path, paper_conn, monkeyp
         [
             "--evidence", _evidence_file(tmp_path),
             "--profile", "donchian_stock_x",
-            "--i-confirm-phase6-graduated",
+            "--owner-approval", "test authorisation",
         ]
     )
 
     row = paper_conn.execute(
-        "SELECT state, backtest_run_id, oos_result_ref FROM strategy_registry "
-        "WHERE profile_name = 'donchian_stock_x'"
+        "SELECT state, backtest_run_id, oos_result_ref, entry_variant "
+        "FROM strategy_registry WHERE profile_name = 'donchian_stock_x'"
     ).fetchone()
-    assert row == ("candidate", 42, "reports/backtests/donchian_evidence.json")
+    assert row == ("candidate", 42, "reports/backtests/donchian_evidence.json", "sys1")
+    reason = paper_conn.execute(
+        "SELECT reason FROM strategy_registry_transitions "
+        "WHERE profile_name = 'donchian_stock_x'"
+    ).fetchone()[0]
+    assert "test authorisation" in reason
 
 
 def test_register_entrant_unknown_profile_exits(tmp_path, capsys):
@@ -263,7 +268,7 @@ def test_register_entrant_unknown_profile_exits(tmp_path, capsys):
             [
                 "--evidence", _evidence_file(tmp_path),
                 "--profile", "nope",
-                "--i-confirm-phase6-graduated",
+                "--owner-approval", "test authorisation",
             ]
         )
 

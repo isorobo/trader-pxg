@@ -36,14 +36,20 @@ import pandas as pd
 
 from trader.backtest.config import SLIPPAGE_PCT
 from trader.backtest.iterator import PointInTimeIterator
-from trader.backtest.strategies.momentum_v2 import (
-    MOMENTUM_VARIANTS,
-    _rsi_wilder,
-    make_pick_entries,
-)
+from trader.backtest.strategies.momentum_v2 import _rsi_wilder
 from trader.backtest.universe import STOCK_UNIVERSE
 from trader.data.api import get_daily_bars
-from trader.paper import alerts, calendar_, config, config_store, idempotency, ledger, ops_log, reconcile
+from trader.paper import (
+    alerts,
+    calendar_,
+    config,
+    config_store,
+    idempotency,
+    ledger,
+    ops_log,
+    reconcile,
+    signals,
+)
 from trader.paper import broker_ibkr
 from trader.risk import gate, sizer
 from trader.tournament import frozen_config as tournament_frozen_config
@@ -102,17 +108,37 @@ def _bars_as_dicts(conn, symbol: str, as_of_date: date) -> list[dict]:
 
 
 def scan_candidates(conn, as_of_date: date) -> list[dict]:
-    """Scan the frozen 18-symbol stock universe for a fresh loose-momentum
-    entry signal (D-01/D-02/D-14), using only bars up to (not including)
-    ``as_of_date`` (D-05: yesterday's close, since today's own close is not
-    yet known shortly after today's open).
+    """Scan the frozen 18-symbol stock universe with EVERY live strategy
+    family's OWN frozen entry signal (multi-signal book, owner-approved
+    2026-07-30) -- one pass per distinct (strategy_id, entry_variant) pair
+    in the live registry, routed via trader/paper/signals.py. Bars are
+    bounded to yesterday's close exactly as before (D-05).
 
     Returns one candidate dict per fired symbol: ``{"symbol", "venue",
-    "score", "volatility"}``. A symbol already in ``open_positions`` (any
-    strategy_id) never re-fires as a new candidate this run --
-    ``make_pick_entries``'s own ``pick_entries`` closure enforces this via
-    its ``open_positions`` argument.
+    "score", "volatility", "family"}`` -- ``family`` is the strategy_id
+    whose signal fired, and downstream profile assignment stays WITHIN that
+    family. Pre-registered dedupe rule: families scan in sorted
+    strategy_id order and the first family to claim a symbol keeps it for
+    this run; a symbol never becomes two candidates.
+
+    ``score`` is Wilder RSI(14) for every family -- the exact scale the
+    incumbent momentum book always used. The sizer ranks and weights by
+    score, so one shared scale is the only honest cross-family comparison;
+    the known bias (mean-reversion dips rank below momentum strength) is
+    accepted and documented rather than patched with an invented per-family
+    score.
+
+    Raises RuntimeError when the registry has NO live configs at all --
+    the T-05-11 visibility guard, since with zero families this scan would
+    otherwise return 0 candidates forever without ever surfacing why.
     """
+    live_configs = config_store.get_live_configs(conn)
+    if not live_configs:
+        raise RuntimeError(
+            "every live strategy config is retired -- nothing left to trade"
+        )
+    family_pairs = sorted({(c.strategy_id, c.entry_variant) for c in live_configs})
+
     yesterday = as_of_date - timedelta(days=1)
     bars_by_symbol = {
         symbol: get_daily_bars(
@@ -124,27 +150,33 @@ def scan_candidates(conn, as_of_date: date) -> list[dict]:
     iterator.advance_to(yesterday)
 
     open_symbols = {p["symbol"] for p in ledger.get_open_positions(conn)}
-    pick_entries = make_pick_entries(MOMENTUM_VARIANTS["loose"])
-    # rng is seeded deterministically -- the loose variant's own signal
-    # logic never actually consumes rng, but the shared 4-arg
-    # pick_entries(iterator, date, open_positions, rng) contract requires
-    # passing one.
-    fired = pick_entries(iterator, pd.Timestamp(yesterday), open_symbols, random.Random(0))
 
     candidates: list[dict] = []
-    for symbol in fired:
-        history = iterator.history(symbol)
-        closes = history[:, 3]
-        rsi = _rsi_wilder(closes)
-        volatility = sizer.compute_volatility(_history_to_bar_dicts(history))
-        candidates.append(
-            {
-                "symbol": symbol,
-                "venue": _ROUTING_VENUE,
-                "score": rsi,
-                "volatility": volatility,
-            }
+    claimed: set[str] = set()
+    for strategy_id, entry_variant in family_pairs:
+        pick_entries = signals.pick_entries_for(strategy_id, entry_variant)
+        # rng is seeded deterministically -- no live signal consumes rng,
+        # but the shared 4-arg contract requires passing one.
+        fired = pick_entries(
+            iterator, pd.Timestamp(yesterday), open_symbols, random.Random(0)
         )
+        for symbol in fired:
+            if symbol in claimed:
+                continue
+            claimed.add(symbol)
+            history = iterator.history(symbol)
+            closes = history[:, 3]
+            rsi = _rsi_wilder(closes)
+            volatility = sizer.compute_volatility(_history_to_bar_dicts(history))
+            candidates.append(
+                {
+                    "symbol": symbol,
+                    "venue": _ROUTING_VENUE,
+                    "score": rsi,
+                    "volatility": volatility,
+                    "family": strategy_id,
+                }
+            )
     return candidates
 
 
@@ -173,28 +205,38 @@ def assign_exit_profile(symbol: str, live_profile_names: list[str]) -> str:
     return names[index]
 
 
-def _live_profile_names(conn) -> list[str]:
-    """The profile_names of every live (non-retired) strategy_config, read
-    from the strategy_registry via config_store (Phase 7, D-08 -- the
-    registry already excludes retired/candidate rows; the
+def _live_profiles_by_family(conn) -> dict[str, list[str]]:
+    """Live (non-retired) profile_names grouped by strategy_id family, read
+    from the strategy_registry via config_store (Phase 7 D-08; the
     is_strategy_retired check stays as defence in depth, both systems must
-    agree a config is live).
+    agree a config is live). Multi-signal book: a candidate fired by family
+    X is only ever assigned one of family X's own profiles.
 
     Raises RuntimeError, not a silent empty return, when no live config
     remains -- a T-05-11-shaped visibility gap otherwise (this process
     would silently enter zero positions forever without ever surfacing
     why).
     """
-    names = [
-        cfg.profile_name
-        for cfg in config_store.get_live_configs(conn)
-        if not ledger.is_strategy_retired(conn, cfg.profile_name)
-    ]
-    if not names:
+    by_family: dict[str, list[str]] = {}
+    for cfg in config_store.get_live_configs(conn):
+        if ledger.is_strategy_retired(conn, cfg.profile_name):
+            continue
+        by_family.setdefault(cfg.strategy_id, []).append(cfg.profile_name)
+    if not by_family:
         raise RuntimeError(
             "every live strategy config is retired -- nothing left to trade"
         )
-    return names
+    return by_family
+
+
+def _live_profile_names(conn) -> list[str]:
+    """Flat view of _live_profiles_by_family -- kept for callers/tests that
+    only need the full live list."""
+    return sorted(
+        name
+        for names in _live_profiles_by_family(conn).values()
+        for name in names
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -335,8 +377,9 @@ def run_entry_pipeline_once(conn, ibkr_adapter, as_of_date: date | None = None) 
 
     # Raises RuntimeError if every live config has been retired -- always
     # called once real candidates exist this run (T-05-11).
-    live_profile_names = _live_profile_names(conn)
+    live_profiles_by_family = _live_profiles_by_family(conn)
     live_configs_by_name = config_store.get_live_configs_by_profile_name(conn)
+    family_by_symbol = {c["symbol"]: c["family"] for c in candidates}
 
     open_positions_for_sizer = [
         {
@@ -356,12 +399,16 @@ def run_entry_pipeline_once(conn, ibkr_adapter, as_of_date: date | None = None) 
     for position in sized["positions"]:
         # Phase 7 (D-04): profile_name/cfg resolve BEFORE dollar_amount so
         # probation-state configs can be sized at the frozen 25% multiplier.
-        # assign_exit_profile needs only symbol + live_profile_names, both
-        # already known here -- the symbol-only hash assignment is
-        # unchanged. Heal paths (STEP 0 above, STEP 1 below) never apply
+        # Multi-signal book: the symbol-only hash assignment is unchanged,
+        # but it now spreads WITHIN the family whose signal fired this
+        # candidate -- a Donchian entry never trades under a momentum
+        # profile. Heal paths (STEP 0 above, STEP 1 below) never apply
         # the multiplier: they reconstruct an already-placed order's qty
         # verbatim (07-RESEARCH.md Pitfall 3).
-        profile_name = assign_exit_profile(position["symbol"], live_profile_names)
+        profile_name = assign_exit_profile(
+            position["symbol"],
+            live_profiles_by_family[family_by_symbol[position["symbol"]]],
+        )
         cfg = live_configs_by_name[profile_name]
         multiplier = (
             tournament_frozen_config.PROBATION_SIZE_MULTIPLIER

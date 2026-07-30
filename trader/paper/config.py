@@ -77,6 +77,11 @@ class LiveStrategyConfig:
     # (the pre-Phase-7 transcription, kept as the seed reference) is
     # unchanged. The live loader is trader/paper/config_store.py.
     state: str = "full"
+    # Multi-signal live book (owner-approved 2026-07-30): which frozen
+    # entry variant this row trades, resolved by trader/paper/signals.py.
+    # Defaults to 'loose' -- the variant Phase 5 hardcoded for the five
+    # incumbent momentum rows from the start.
+    entry_variant: str = "loose"
 
 
 # The five real D-01 survivor configs (KILL-CONDITIONS.md / D-01

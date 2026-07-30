@@ -43,6 +43,7 @@ def _row_to_live_config(row: sqlite3.Row) -> LiveStrategyConfig:
         max_dd_kill=row["max_dd_kill"],
         consecutive_loss_kill=row["consecutive_loss_kill"],
         state=row["state"],
+        entry_variant=row["entry_variant"] or "loose",
     )
 
 

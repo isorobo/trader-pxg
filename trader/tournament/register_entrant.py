@@ -1,21 +1,27 @@
-r"""Human-run entrant registration -- the Phase 8 gate command.
+r"""Human/owner-authorised entrant registration (D-07: "human-approved
+entrants only").
 
-Reads a survivor payload from an evidence file (e.g.
-reports/backtests/donchian_evidence.json, produced by
-run_donchian_evidence.py) and registers it as a 'candidate' with both
-evidence stamps. The next weekly tournament run admits it to probation
-automatically when the D-05 caps allow.
+Reads a survivor payload from an evidence file (produced by a
+run_*_evidence.py driver) and registers it as a 'candidate' with both
+evidence stamps and its entry_variant. The next weekly tournament run
+admits it to probation automatically when the D-05 caps allow.
 
-THE GATE: the phase doc opens Phase 8 ("optional signal expansion") only
-after Phase 6 has graduated at least one incumbent. This command is
-deliberately manual and requires --i-confirm-phase6-graduated -- the
-operator's explicit assertion that the gate is open. It is never called
-from any scheduled task or automated path.
+THE GATE: --owner-approval "<quoted authorisation>" is required. The text
+is recorded verbatim in the strategy_registry_transitions reason -- every
+entrant's admission is traceable to an explicit owner instruction
+(originally a Phase-6-graduation self-gate; replaced 2026-07-30 by the
+owner's direct instruction to run the new strategies in the live paper
+mix: "use a mix of all of them use more that one at once if needded").
+This command is never called from any scheduled task or automated path.
+
+The entrant's (strategy_id, entry_variant) must be routable by
+trader/paper/signals.py -- a live row whose signal the entry pipeline
+cannot scan would trade someone else's signal, which the system never does.
 
     .venv\Scripts\python.exe -m trader.tournament.register_entrant \
         --evidence reports/backtests/donchian_evidence.json \
         --profile <survivor profile_name> \
-        --i-confirm-phase6-graduated
+        --owner-approval "<why/when the owner authorised this entrant>"
 """
 
 from __future__ import annotations
@@ -30,6 +36,7 @@ from trader.backtest.config import EXIT_PROFILE
 
 def main(argv: list[str] | None = None) -> None:
     from trader.data import db
+    from trader.paper import signals
     from trader.tournament import pipeline
 
     parser = argparse.ArgumentParser(
@@ -41,18 +48,19 @@ def main(argv: list[str] | None = None) -> None:
         "--profile", required=True, help="survivor profile_name from the evidence file."
     )
     parser.add_argument(
-        "--i-confirm-phase6-graduated",
-        action="store_true",
-        help="Required: the operator's assertion that Phase 6 has graduated "
-        "at least one incumbent (the phase doc's Phase 8 gate).",
+        "--owner-approval",
+        default=None,
+        help="Required: the owner's authorisation for this entrant, recorded "
+        "verbatim in the transition audit trail.",
     )
     parser.add_argument("--db-path", default="data/trader.db")
     args = parser.parse_args(argv)
 
-    if not args.i_confirm_phase6_graduated:
+    if not args.owner_approval:
         print(
-            "Refusing: Phase 8 opens only after Phase 6 graduates a strategy "
-            "(phase doc). Pass --i-confirm-phase6-graduated once that is true.",
+            "Refusing: entrants are human-approved only (D-07). Pass "
+            '--owner-approval "<the owner\'s instruction>" so the admission '
+            "is traceable in the audit trail.",
             file=sys.stderr,
         )
         sys.exit(2)
@@ -67,6 +75,17 @@ def main(argv: list[str] | None = None) -> None:
         print(
             f"No survivor named {args.profile!r} in {args.evidence}. "
             f"Survivors present: {names}",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    if not signals.is_routable(survivor["strategy_id"], survivor["entry_variant"]):
+        print(
+            f"Refusing: ({survivor['strategy_id']!r}, "
+            f"{survivor['entry_variant']!r}) has no route in "
+            "trader/paper/signals.py -- wire the family's frozen signal "
+            "there first, or this row would silently trade another "
+            "family's signal.",
             file=sys.stderr,
         )
         sys.exit(2)
@@ -92,8 +111,10 @@ def main(argv: list[str] | None = None) -> None:
             consecutive_loss_kill=survivor["consecutive_loss_kill"],
             reason=(
                 f"owner-approved entrant via {args.evidence} "
-                f"(entry_variant={survivor['entry_variant']})"
+                f"(entry_variant={survivor['entry_variant']}); "
+                f"owner approval: {args.owner_approval}"
             ),
+            entry_variant=survivor["entry_variant"],
         )
         pipeline.stamp_backtest(conn, survivor["profile_name"], survivor["backtest_run_id"])
         pipeline.stamp_oos(conn, survivor["profile_name"], survivor["oos_result_ref"])

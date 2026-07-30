@@ -130,6 +130,7 @@ def register_candidate(
     consecutive_loss_kill: int,
     reason: str,
     now: datetime | None = None,
+    entry_variant: str = "loose",
 ) -> None:
     """Insert a new 'candidate' row (frozen numeric columns written once,
     never UPDATEd) plus its transition record. Raises ValueError on a
@@ -149,8 +150,9 @@ def register_candidate(
         INSERT INTO strategy_registry
             (profile_name, strategy_id, stop_pct, tp_pct, scale_out_json,
              trailing_pct, max_hold_days, eod_flat, pf_floor, max_dd_kill,
-             consecutive_loss_kill, entered_at, state, state_changed_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?)
+             consecutive_loss_kill, entered_at, state, state_changed_at,
+             entry_variant)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?, ?)
         """,
         (
             profile_name,
@@ -166,6 +168,7 @@ def register_candidate(
             consecutive_loss_kill,
             ts,
             ts,
+            entry_variant,
         ),
     )
     conn.execute(
