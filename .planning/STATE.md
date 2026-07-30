@@ -92,3 +92,10 @@ Recent decisions affecting current work:
 Last session: 2026-07-28
 Stopped at: Phase 7 executed and verified (572 tests); owner audit of the fixture decision record is the remaining exit check
 Resume file: .planning/phases/07-attribution-tournament/07-VALIDATION.md
+
+2026-07-30 (final autonomous wrap-up):
+- Crypto paper leg BUILT + ARMED per the owner-accepted plan: crypto_entry_pipeline (daily incl weekends, sim fills, shared budget, probation sizing, graceful skip until a crypto survivor exists), TraderCryptoEntry task registered (12:10 NZ daily), supervised first run = clean skip. signals.py now routes base_bucket generically; rsi2 pre-registered stock-only per its spec. 635 tests
+- MA-crossover evidence COMPLETE: 3,600 tune + 10 OOS runs. FIVE stock survivors (fast_ema_20_50 choppy_v2, PF 3.9-4.75, n=33); golden_sma_50_200 trending all insufficient_sample (10-11 trades); NO crypto/memecoin candidate reached OOS (tune 30-trade floor) -- crypto leg stays dormant, honestly
+- Best MA-cross survivor (Sharpe 2.14) REGISTERED as candidate; entrant queue is now RSI-2 then MA-cross, both waiting on a roster slot (cap 6). Four strategy families total: momentum (5 full), donchian (probation 25%), rsi2 (queued), macross (queued)
+- SIX scheduled tasks Ready: GroundTruthPoll, PaperEntry, CryptoEntry, PaperGuardian, PaperReconcile, AITournament
+- Remaining gates need TIME (Phase 6: 1-3 months of trades) or MONEY (Phase 9-10: owner only). Nothing else is buildable without results accumulating
