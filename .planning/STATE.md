@@ -17,7 +17,11 @@ Last activity: 2026-07-29 — Autonomous work session (owner directive: everythi
 - Donchian entrant (Strategys/10) built up to the Phase 8 gate: frozen sys1/sys2 variants, evidence driver (sweep_id=donchian_v1), human-only register CLI requiring --i-confirm-phase6-graduated. Evidence sweep COMPLETE 2026-07-29: 1,080/1,080 tune runs + 10 OOS runs, EIGHT OOS SURVIVORS (7 sys1 + 1 sys2; choppy_v2 PF 2.9-11.9, trending_v2 PF 1.1-2.0), payloads with derived kill triggers in reports/backtests/donchian_evidence.json (local artifact, reports/ gitignored). Registration command documented in the evidence file, gated on Phase 6 graduation
 - D-01 gap closed: daily report now regenerates the attribution dashboard (never-fail)
 - Phase 0 poller: task healthy (result 0, 15-min repeat); low daily poll counts are machine-uptime gaps, not a poller fault
-- GitHub remote: blocked, no gh CLI installed. Owner action: flip trader-pxg private in the web UI, then git remote add origin <url> && git push -u origin master
+- GitHub: LIVE at github.com/isorobo/trader-pxg (owner chose public), branch renamed master→main, full history pushed 2026-07-29
+- Weekly tournament task REGISTERED ("TraderAITournament", Sunday 15:00 NZ) and dry-run verified end to end against the real DB (runs 1-2: 5 holds, dashboard + graduation report + Telegram). Dry run caught+fixed a real bug: ops_log rejected entry_type 'tournament' (now 'scheduled_run')
+- RSI-2 entrant (Strategys/11) evidence COMPLETE 2026-07-29: 1,080 tune + 10 OOS runs, FIVE OOS SURVIVORS (all choppy_v2, hold30, PF 4.0-4.6, Sharpe 3.0-3.3, n=75); trending_v2 all insufficient_sample (8-12 trades). Payloads in reports/backtests/rsi2_evidence.json, same Phase 8 gate
+- TS-momentum (Strategys/12) deferred with reasoning (see Deferred Items)
+- IBKR: account U27412777 FUNDED (2026-07-30, NZD 0.62 settled, "fund your account" checkmark green). Next: create paper trading user in Client Portal, then Gateway on 4002
 
 Progress: [██████░░░░] 64%
 
@@ -70,7 +74,8 @@ Recent decisions affecting current work:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| Ops | Weekly tournament schtasks registration | Folded into 05-09 batch | 2026-07-28 |
+| Strategy | TS-momentum entrant (Strategys/12) | Deferred: a monthly-rebalance portfolio backbone with no stops — does not map to the daily entry-signal + exit-grid engine; forcing it through would test something other than the published strategy. Needs its own engine shape, designed properly in Phase 8 | 2026-07-29 |
+| Ops | ~~Weekly tournament schtasks registration~~ | DONE 2026-07-29: task "TraderAITournament" registered (Sunday 15:00 NZ) and dry-run verified end to end against the real DB | 2026-07-28 |
 
 ## Session Continuity
 
