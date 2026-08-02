@@ -476,7 +476,9 @@ def main(argv: list[str] | None = None) -> None:
 
     conn = db.get_connection(args.db_path)
     try:
-        ibkr_adapter = IBKRBrokerAdapter()
+        # Own client id (2026-08-03): never collides with reconcile's
+        # minutely connection on the shared default.
+        ibkr_adapter = IBKRBrokerAdapter(client_id=config.IBKR_CLIENT_ID_GUARDIAN)
         ibkr_adapter.connect()
         try:
             summary = run_guardian_once(conn, ibkr_adapter)

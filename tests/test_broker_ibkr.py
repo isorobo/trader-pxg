@@ -142,6 +142,21 @@ def test_snapshot_empty_when_fake_ib_returns_nothing(fake_ib):
     assert result == {"positions": {}, "open_orders": [], "fills": []}
 
 
+def test_scheduled_processes_use_distinct_client_ids():
+    """2026-08-03 collision regression: the Gateway rejects simultaneous
+    connections sharing one client id, and the minutely reconcile can
+    overlap guardian/entry whenever startup sync runs slow. Three
+    processes, three ids -- forever."""
+    from trader.paper import config
+
+    ids = {
+        config.IBKR_CLIENT_ID_DEFAULT,
+        config.IBKR_CLIENT_ID_GUARDIAN,
+        config.IBKR_CLIENT_ID_ENTRY,
+    }
+    assert len(ids) == 3
+
+
 def test_snapshot_order_sync_never_hangs_on_missing_open_order_end(monkeypatch):
     """2026-07-30 real-Gateway regression: a fresh paper account can never
     send openOrderEnd, and ib_async's synchronous reqOpenOrders() then

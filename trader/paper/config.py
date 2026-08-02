@@ -29,6 +29,14 @@ IBKR_PAPER_PORT = 4002
 IBKR_CLIENT_ID_ENV = "IBKR_CLIENT_ID"
 IBKR_CLIENT_ID_DEFAULT = 5
 
+# Distinct API client ids per scheduled process (2026-08-03): the Gateway
+# rejects two simultaneous connections sharing one id, and reconcile's
+# minutely connect can overlap guardian's five-minutely one whenever the
+# Gateway's startup sync runs slow (post-maintenance). Reconcile keeps the
+# env-overridable default (5); the other processes get fixed distinct ids.
+IBKR_CLIENT_ID_GUARDIAN = 6
+IBKR_CLIENT_ID_ENTRY = 7
+
 # --- Notification / read-only market data credentials ----------------------
 TELEGRAM_BOT_TOKEN_ENV = "TELEGRAM_BOT_TOKEN"
 TELEGRAM_CHAT_ID_ENV = "TELEGRAM_CHAT_ID"
