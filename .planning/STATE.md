@@ -99,3 +99,5 @@ Resume file: .planning/phases/07-attribution-tournament/07-VALIDATION.md
 - Best MA-cross survivor (Sharpe 2.14) REGISTERED as candidate; entrant queue is now RSI-2 then MA-cross, both waiting on a roster slot (cap 6). Four strategy families total: momentum (5 full), donchian (probation 25%), rsi2 (queued), macross (queued)
 - SIX scheduled tasks Ready: GroundTruthPoll, PaperEntry, CryptoEntry, PaperGuardian, PaperReconcile, AITournament
 - Remaining gates need TIME (Phase 6: 1-3 months of trades) or MONEY (Phase 9-10: owner only). Nothing else is buildable without results accumulating
+
+2026-08-02: Owner-requested 2h task pause (2026-08-01 22:45) silently became ~22h -- the 00:45 re-enable one-shot lacked StartWhenAvailable and the machine was off at its trigger time. Zero trading impact (market closed throughout) but the Sunday 15:00 tournament was missed; run 4 executed manually at ~21:00 on owner resume order (8 holds, no admissions, reports + Telegram sent). Lesson recorded: any future pause one-shot gets StartWhenAvailable + the resume is verified, not assumed. All six tasks re-enabled and Ready; owner directive: run continuously until told otherwise.
