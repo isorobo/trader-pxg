@@ -155,8 +155,10 @@ def write_report_markdown(rows: list[dict], coverage: dict, out_path: str) -> No
     everything flagged this week, what % ended the day up vs dumped from where
     the scanner first saw it.
     """
-    up_count = sum(1 for row in rows if (row["pct_return_same_day"] or 0) > 0)
-    down_count = len(rows) - up_count if rows else 0
+    resolved = [row for row in rows if row["pct_return_same_day"] is not None]
+    up_count = sum(1 for row in resolved if row["pct_return_same_day"] > 0)
+    down_count = len(resolved) - up_count
+    unresolved_count = len(rows) - len(resolved)
 
     lines = [
         "# Ground Truth Daily Report",
@@ -190,8 +192,12 @@ def write_report_markdown(rows: list[dict], coverage: dict, out_path: str) -> No
     lines.append("")
     if rows:
         lines.append(
-            f"Of {len(rows)} tickers flagged, {up_count} ended the day up and "
-            f"{down_count} dumped from where the scanner first saw them."
+            f"Of {len(rows)} tickers flagged, {len(resolved)} had a resolvable "
+            f"same-day close: {up_count} ended the day up and {down_count} "
+            f"dumped from where the scanner first saw them. "
+            f"{unresolved_count} could not be priced (missing/failed lookups) "
+            "and are counted in NEITHER column -- missing data is never "
+            "evidence."
         )
     else:
         lines.append("0 tickers flagged in this window — no snapshots collected yet.")
@@ -277,8 +283,9 @@ def main(argv=None) -> None:
             error,
         )
 
-    up_count = sum(1 for row in rows if (row["pct_return_same_day"] or 0) > 0)
-    down_count = len(rows) - up_count if rows else 0
+    resolved = [row for row in rows if row["pct_return_same_day"] is not None]
+    up_count = sum(1 for row in resolved if row["pct_return_same_day"] > 0)
+    down_count = len(resolved) - up_count
     print(f"Ground truth report written to {out_path}")
     print(f"Tickers flagged: {len(rows)}")
     print(
