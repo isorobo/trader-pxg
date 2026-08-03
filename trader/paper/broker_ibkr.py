@@ -179,15 +179,46 @@ class IBKRBrokerAdapter:
         Paper accounts default to 15-20 minute delayed data unless the
         owner's live account carries a market-data subscription -- accepted
         explicitly (not silently treated as real-time) per 05-RESEARCH.md.
-        Reads whichever of `.marketPrice()` / `.last` the injected client's
-        returned ticker exposes.
+
+        2026-08-04 real-position regression: the contract MUST be qualified
+        (conId populated) before reqMktData -- ib_async raises on hashing an
+        unqualified contract, which crashed every guardian tick once a real
+        position existed. After a short tick wait, the price resolves as
+        marketPrice -> last -> close (delayed close covers out-of-session
+        ticks); all-NaN raises RuntimeError -- a silent NaN would disable
+        every exit check while looking healthy (the system never lies to
+        itself).
         """
         from ib_async import Stock
 
         contract = Stock(symbol, "SMART", "USD")
+        qualify = getattr(self._ib_client, "qualifyContracts", None)
+        if callable(qualify):
+            qualify(contract)
+        # Type 4 = delayed-frozen: delayed ticks in session, the frozen
+        # delayed close outside it. Without this, a paper account with no
+        # market-data subscription gets NOTHING back from reqMktData
+        # (2026-08-04, observed live).
+        set_type = getattr(self._ib_client, "reqMarketDataType", None)
+        if callable(set_type):
+            set_type(4)
         ticker = self._ib_client.reqMktData(contract)
+        sleep_fn = getattr(self._ib_client, "sleep", None)
+        if callable(sleep_fn):
+            sleep_fn(2.0)
+
+        def _usable(value) -> bool:
+            return value is not None and value == value  # rejects None/NaN
+
         if hasattr(ticker, "marketPrice"):
             price = ticker.marketPrice()
-            if price is not None:
+            if _usable(price):
                 return price
-        return ticker.last
+        if _usable(getattr(ticker, "last", None)):
+            return ticker.last
+        if _usable(getattr(ticker, "close", None)):
+            return ticker.close
+        raise RuntimeError(
+            f"no usable price for {symbol} (marketPrice/last/close all "
+            "missing or NaN) -- refusing to tick exits on unknown prices"
+        )

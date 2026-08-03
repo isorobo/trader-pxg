@@ -142,6 +142,41 @@ def test_snapshot_empty_when_fake_ib_returns_nothing(fake_ib):
     assert result == {"positions": {}, "open_orders": [], "fills": []}
 
 
+def test_latest_price_qualifies_contract_before_requesting(fake_ib):
+    """2026-08-04 real-position regression: an unqualified contract (no
+    conId) makes ib_async raise inside reqMktData -- every guardian tick
+    crashed once a real position existed. qualifyContracts must be called
+    before the data request."""
+    ticker = _FakeTicker(market_price=101.25, last=101.10)
+    fake_ib.reqMktData.return_value = ticker
+    adapter = IBKRBrokerAdapter(host="127.0.0.1", port=4002, client_id=5, ib_client=fake_ib)
+
+    adapter.latest_price("JPM")
+
+    fake_ib.qualifyContracts.assert_called_once()
+
+
+def test_latest_price_nan_falls_back_and_all_nan_raises(fake_ib):
+    """A NaN marketPrice must fall through to last/close, and all-NaN must
+    raise rather than silently disabling exit checks."""
+    nan = float("nan")
+
+    fake_ib.reqMktData.return_value = _FakeTicker(market_price=nan, last=99.5)
+    adapter = IBKRBrokerAdapter(host="127.0.0.1", port=4002, client_id=5, ib_client=fake_ib)
+    assert adapter.latest_price("JPM") == 99.5
+
+    class _AllNan:
+        last = nan
+        close = nan
+
+        def marketPrice(self):
+            return nan
+
+    fake_ib.reqMktData.return_value = _AllNan()
+    with pytest.raises(RuntimeError, match="no usable price"):
+        adapter.latest_price("JPM")
+
+
 def test_scheduled_processes_use_distinct_client_ids():
     """2026-08-03 collision regression: the Gateway rejects simultaneous
     connections sharing one client id, and the minutely reconcile can
