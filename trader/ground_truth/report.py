@@ -35,11 +35,24 @@ def format_coingecko_date(d: date) -> str:
 
 
 def fetch_stock_close(symbol: str, on_date: date) -> float | None:
-    """Fetch symbol's close price on on_date via yfinance, or None if unavailable."""
-    hist = yfinance.Ticker(symbol).history(
-        start=on_date.isoformat(),
-        end=(on_date + timedelta(days=1)).isoformat(),
-    )
+    """Fetch symbol's close price on on_date via yfinance, or None if
+    unavailable. Any transport/API error also returns None -- the report
+    must never crash on a single ticker's failed lookup (the same contract
+    fetch_crypto_close always had; this path gained it 2026-08-03 after a
+    transient connection reset killed a whole report run)."""
+    try:
+        hist = yfinance.Ticker(symbol).history(
+            start=on_date.isoformat(),
+            end=(on_date + timedelta(days=1)).isoformat(),
+        )
+    except Exception as error:
+        log.warning(
+            "yfinance close lookup failed for %s (%s: %s)",
+            symbol,
+            type(error).__name__,
+            error,
+        )
+        return None
     if hist.empty:
         return None
     return float(hist["Close"].iloc[0])

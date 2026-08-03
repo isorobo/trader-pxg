@@ -25,6 +25,19 @@ def test_fetch_stock_close_uses_one_day_window():
     assert result == 123.45
 
 
+def test_fetch_stock_close_returns_none_on_transport_error():
+    """2026-08-03 regression: a transient connection reset in yfinance
+    killed a whole report run -- the stock path must honour the same
+    never-crash-on-one-ticker contract the crypto path always had."""
+    with patch("yfinance.Ticker") as mock_ticker_cls:
+        mock_ticker_cls.return_value.history.side_effect = OSError(
+            "Recv failure: Connection was reset"
+        )
+        result = report.fetch_stock_close("AAA", date(2026, 7, 26))
+
+    assert result is None
+
+
 def test_fetch_crypto_close_uses_ddmmyyyy_param():
     mock_response_json = {"market_data": {"current_price": {"usd": 65000.0}}}
     with patch("requests.get") as mock_get:
