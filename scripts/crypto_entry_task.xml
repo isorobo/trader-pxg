@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
-    <Description>Runs Trader AI's crypto-sim entry pipeline once daily (crypto trades 24/7, weekends included -- no trading-day gate; CRYPTO-PAPER-LEG-PLAN.md, owner-approved 2026-07-30). Skips gracefully while the registry has no live crypto-bucket families, so the task self-activates when a crypto survivor is registered. Daily 12:10 NZ local -- clear of the overnight stock-leg window and the 5-min guardian's busiest hours.</Description>
+    <Description>Runs Trader AI's crypto-sim entry pipeline once per HOUR (intraday track, owner directive 2026-08-04: tested at the hour, traded at the hour; crypto trades 24/7, weekends included). Each pass refreshes the hourly bar cache from Binance, scans hourly families against the last completed candle and daily families against yesterday's close, and skips gracefully while no live crypto families exist. Offset :10 past the hour so the new candle is fully closed and published.</Description>
   </RegistrationInfo>
   <Triggers>
     <TimeTrigger>
-      <StartBoundary>2026-07-31T12:10:00</StartBoundary>
+      <StartBoundary>2026-08-04T20:10:00</StartBoundary>
       <Enabled>true</Enabled>
       <Repetition>
-        <Interval>P1D</Interval>
+        <Interval>PT1H</Interval>
         <Duration>P9999D</Duration>
         <StopAtDurationEnd>false</StopAtDurationEnd>
       </Repetition>

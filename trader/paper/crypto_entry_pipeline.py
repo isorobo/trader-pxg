@@ -93,39 +93,79 @@ def _live_crypto_families(conn) -> dict[str, dict]:
     return families
 
 
+def _hourly_frames(conn, bucket: str, cutoff_iso: str) -> dict:
+    """Hourly frames per symbol, bounded to the last COMPLETED hour --
+    refreshed from Binance first so the scan sees the newest closed candle
+    (refresh itself already drops the still-forming hour)."""
+    from trader.data.intraday import get_hourly_bars, refresh_hourly_bars
+
+    symbols = tuple(UNIVERSE_BY_BUCKET[bucket])
+    refresh_hourly_bars(conn, symbols=symbols)
+    frames = {}
+    for symbol in symbols:
+        rows = get_hourly_bars(conn, symbol, end=cutoff_iso)
+        if rows:
+            df = pd.DataFrame(rows)
+            df.index = pd.to_datetime(df["ts"], utc=True)
+            frames[symbol] = df[["open", "high", "low", "close", "volume"]]
+    return frames
+
+
 def scan_crypto_candidates(conn, families: dict[str, dict], as_of_date: date) -> list[dict]:
-    """One scan per (family, variant), bars bounded to yesterday (same
-    D-05 discipline as stock). Sorted-family first-claim dedupe, RSI(14)
-    score -- both identical to the stock leg's pre-registered rules."""
+    """One scan per (family, variant). Daily families scan bars bounded to
+    yesterday (D-05 discipline); HOURLY families (signals.timeframe_for ==
+    '1h') scan the hourly cache bounded to the last completed hour --
+    tested at the hour, traded at the hour. Sorted-family first-claim
+    dedupe, RSI(14) score -- identical to the stock leg's rules."""
     yesterday = as_of_date - timedelta(days=1)
     open_symbols = {p["symbol"] for p in ledger.get_open_positions(conn)}
 
     candidates: list[dict] = []
     claimed: set[str] = set()
     bars_by_bucket: dict[str, dict] = {}
+    hourly_by_bucket: dict[str, dict] = {}
+    last_completed_hour = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:00:00Z")
     for strategy_id in sorted(families):
         info = families[strategy_id]
         bucket = info["bucket"]
-        if bucket not in bars_by_bucket:
-            bars_by_bucket[bucket] = {
-                symbol: get_daily_bars(symbol, end=str(yesterday), conn=conn)
-                for symbol in UNIVERSE_BY_BUCKET[bucket]
-            }
-        iterator = PointInTimeIterator(bars_by_bucket[bucket])
-        iterator.advance_to(yesterday)
+        hourly = signals.timeframe_for(strategy_id) == "1h"
+        if hourly:
+            if bucket not in hourly_by_bucket:
+                hourly_by_bucket[bucket] = _hourly_frames(
+                    conn, bucket, last_completed_hour
+                )
+            iterator = PointInTimeIterator(hourly_by_bucket[bucket])
+            if hourly_by_bucket[bucket]:
+                iterator.advance_to(
+                    max(df.index[-1] for df in hourly_by_bucket[bucket].values())
+                )
+            scan_ts = pd.Timestamp(last_completed_hour)
+        else:
+            if bucket not in bars_by_bucket:
+                bars_by_bucket[bucket] = {
+                    symbol: get_daily_bars(symbol, end=str(yesterday), conn=conn)
+                    for symbol in UNIVERSE_BY_BUCKET[bucket]
+                }
+            iterator = PointInTimeIterator(bars_by_bucket[bucket])
+            iterator.advance_to(yesterday)
+            scan_ts = pd.Timestamp(yesterday)
 
         for entry_variant in sorted(info["variants"]):
             pick_entries = signals.pick_entries_for(strategy_id, entry_variant)
             import random as _random
 
             fired = pick_entries(
-                iterator, pd.Timestamp(yesterday), open_symbols, _random.Random(0)
+                iterator, scan_ts, open_symbols, _random.Random(0)
             )
             for symbol in fired:
                 if symbol in claimed:
                     continue
                 claimed.add(symbol)
-                df = bars_by_bucket[bucket][symbol]
+                df = (
+                    hourly_by_bucket[bucket][symbol]
+                    if hourly
+                    else bars_by_bucket[bucket][symbol]
+                )
                 # ts-bearing bar dicts: the risk gate's correlation window
                 # is date-indexed (same shape the stock leg feeds it).
                 bars_dicts = [
@@ -230,8 +270,16 @@ def run_crypto_entry_once(conn, price_fetcher=None, as_of_date: date | None = No
             continue
 
         asset_class = _BUCKET_ASSET_CLASS[bucket_by_symbol[symbol]]
+        # Hourly families stamp the HOUR into the ref: one entry
+        # opportunity per symbol-hour (a same-day re-entry after an exit
+        # would otherwise collide with the day-stamped ref's UNIQUE
+        # constraint). Daily families keep the day stamp.
+        if signals.timeframe_for(family) == "1h":
+            ref_stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
+        else:
+            ref_stamp = as_of_date.isoformat()
         order_ref = idempotency.build_order_ref(
-            profile_name, symbol, as_of_date.isoformat(), _ENTRY_SIDE, _ENTRY_INTENT
+            profile_name, symbol, ref_stamp, _ENTRY_SIDE, _ENTRY_INTENT
         )
         ledger.record_order(
             conn, order_ref, profile_name, symbol, _ENTRY_VENUE, _ENTRY_SIDE,

@@ -18,7 +18,14 @@ signal (the system never lies to itself).
 
 from __future__ import annotations
 
-from trader.backtest.strategies import donchian, macross, momentum_v2, rsi2
+from trader.backtest.strategies import (
+    donchian,
+    hourly_reversion,
+    hourly_squeeze,
+    macross,
+    momentum_v2,
+    rsi2,
+)
 
 # base -> (variants dict, make_pick_entries factory).
 _BASE_SIGNALS: dict[str, tuple[dict, object]] = {
@@ -26,7 +33,24 @@ _BASE_SIGNALS: dict[str, tuple[dict, object]] = {
     "donchian": (donchian.DONCHIAN_VARIANTS, donchian.make_pick_entries),
     "rsi2": (rsi2.RSI2_VARIANTS, rsi2.make_pick_entries),
     "macross": (macross.MACROSS_VARIANTS, macross.make_pick_entries),
+    "hreversion": (
+        hourly_reversion.HOURLY_REVERSION_VARIANTS,
+        hourly_reversion.make_pick_entries,
+    ),
+    "hsqueeze": (
+        hourly_squeeze.HOURLY_SQUEEZE_VARIANTS,
+        hourly_squeeze.make_pick_entries,
+    ),
 }
+
+# Bases whose signals are defined on 1h bars -- the crypto pipeline scans
+# them against the hourly cache, once per completed hour.
+_HOURLY_BASES = ("hreversion", "hsqueeze")
+
+
+def timeframe_for(strategy_id: str) -> str:
+    """'1h' for hourly-bar families, '1d' otherwise."""
+    return "1h" if _base_of(strategy_id) in _HOURLY_BASES else "1d"
 
 # Bases whose published research is bucket-restricted (pre-registered).
 _STOCK_ONLY_BASES = ("rsi2",)
