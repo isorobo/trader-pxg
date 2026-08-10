@@ -42,7 +42,10 @@ def compute_tournament_hash(repo_root: Path | None = None) -> str:
 # The literal freeze point -- hard-coded from a one-time
 # compute_tournament_hash() run against frozen_config.py's finalized
 # contents. Any later byte-level edit trips verify_frozen_tournament().
-FROZEN_TOURNAMENT_HASH = "d5df6e82a825e91b8814450c017859fe1686838f92bd44d414a3d8cf6be023c2"
+# Re-locked 2026-08-08 for the sanctioned owner capacity revision (caps
+# 6->20 active / 2->12 entrants-per-quarter, zero closed trades on the
+# books) -- see frozen_config.py's revision note.
+FROZEN_TOURNAMENT_HASH = "d19838318a8bb2feff24b1ea5c89f62b6189a931a59a2e9924a306a24762d096"
 
 
 def verify_frozen_tournament(repo_root: Path | None = None) -> None:

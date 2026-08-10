@@ -51,7 +51,13 @@ CORRELATION_MIN_OVERLAP = 30
 CORRELATION_THRESHOLD = 0.8
 
 # --- Position sizer (04-RESEARCH.md Q3 / D-03) ----------------------------
-SIZER_TOP_N = 3
+# SIZER_TOP_N: pre-registered recalibration 2026-08-08 (the docstring's
+# sanctioned path -- owner-directed, zero closed trades on the books, and
+# it changes only how FUTURE entries are sized, never an open position's
+# locked exits): 3 -> 20 concurrent positions for the high-throughput
+# paper-testing phase ("up to 20 at a time"). The 10% cash reserve, 50%
+# single-position cap, and 10% memecoin aggregate cap all stay.
+SIZER_TOP_N = 20
 SIZER_VOLATILITY_WINDOW_DAYS = 20
 SIZER_SINGLE_POSITION_CAP = 0.50
 SIZER_MEMECOIN_CAP = 0.10

@@ -205,8 +205,25 @@ def test_open_positions_only_allocates_remaining_budget():
         },
     ]
 
+    # Pin TOP_N=3 for this scenario so the slot-exclusion MATH stays
+    # tested regardless of the live SIZER_TOP_N (raised to 20 by the
+    # 2026-08-08 sanctioned recalibration).
+    from types import SimpleNamespace
+
+    from trader.risk import config as risk_config
+
+    top3_config = SimpleNamespace(**{
+        name: getattr(risk_config, name)
+        for name in dir(risk_config)
+        if name.startswith("SIZER_") or name.startswith("MIN_")
+        or name.startswith("MAX_") or name.startswith("CORRELATION_")
+        or name.startswith("LIQUIDITY_")
+    })
+    top3_config.SIZER_TOP_N = 3
+
     result = sizer.size_positions(
-        scored_candidates, equity=100_000.0, open_positions=open_positions
+        scored_candidates, equity=100_000.0, open_positions=open_positions,
+        config=top3_config,
     )
     weights = {p["symbol"]: p["weight"] for p in result["positions"]}
 

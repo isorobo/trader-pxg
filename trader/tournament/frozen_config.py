@@ -53,5 +53,13 @@ PROBATION_SIZE_MULTIPLIER = 0.25
 
 # D-05: caps. Active = probation + full. Entrants beyond either cap stay
 # 'candidate' (queued).
-MAX_ACTIVE_STRATEGIES = 6
-MAX_NEW_ENTRANTS_PER_QUARTER = 2
+#
+# SANCTIONED OWNER REVISION 2026-08-08 (the one deliberate adjustment,
+# made with ZERO closed trades on the books -- a capacity decision, not a
+# results-driven edit): the owner directed high-throughput parallel
+# testing ("up to 20 at a time ... this is all testing at the moment but
+# it is too slow"). Raised 6 -> 20 active and 2 -> 12 entrants/quarter.
+# Hash re-locked in the same commit; these numbers are frozen again from
+# here.
+MAX_ACTIVE_STRATEGIES = 20
+MAX_NEW_ENTRANTS_PER_QUARTER = 12

@@ -51,5 +51,8 @@ def test_frozen_values_are_the_preregistered_ones():
     assert frozen_config.SHARPE_DEMOTION_FLOOR == 0.0
     assert frozen_config.DEMOTION_SUSTAIN_EVALUATIONS == 4
     assert frozen_config.PROBATION_SIZE_MULTIPLIER == 0.25
-    assert frozen_config.MAX_ACTIVE_STRATEGIES == 6
-    assert frozen_config.MAX_NEW_ENTRANTS_PER_QUARTER == 2
+    # Sanctioned owner capacity revision 2026-08-08 (zero closed trades on
+    # the books; see frozen_config.py's revision note) -- the deliberate
+    # two-place edit this test exists to force.
+    assert frozen_config.MAX_ACTIVE_STRATEGIES == 20
+    assert frozen_config.MAX_NEW_ENTRANTS_PER_QUARTER == 12
