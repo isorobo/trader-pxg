@@ -393,6 +393,10 @@ def run_entry_pipeline_once(conn, ibkr_adapter, as_of_date: date | None = None) 
     sized = sizer.size_positions(accepted, config.PAPER_ACCOUNT_EQUITY, open_positions_for_sizer)
 
     submitted: list[str] = []
+    # Owner directive 2026-08-11: at most PAPER_NIGHTLY_BUDGET dollars of
+    # NEW entries per run, spent top-score first (sized["positions"] is
+    # already score-ordered by the sizer).
+    budget_remaining = config.PAPER_NIGHTLY_BUDGET
 
     # REVISED per-position sequence -- this exact order is load-bearing
     # and must not be reshuffled (D-08 no-bypass-path, BLOCKER 1).
@@ -416,10 +420,13 @@ def run_entry_pipeline_once(conn, ibkr_adapter, as_of_date: date | None = None) 
             else 1.0
         )
         dollar_amount = position["weight"] * config.PAPER_ACCOUNT_EQUITY * multiplier
+        # Nightly budget cap: never deploy more than what remains tonight.
+        dollar_amount = min(dollar_amount, budget_remaining)
         price = market_data[(position["symbol"], position["venue"])]["bars"][-1]["close"]
         qty = broker_ibkr.round_shares_down(dollar_amount, price)
         if qty <= 0:
             continue
+        budget_remaining -= qty * price
 
         # STEP 1 (per-candidate heal check, defensive second layer): ANY
         # date, not just today -- nearly always a no-op for anything STEP 0

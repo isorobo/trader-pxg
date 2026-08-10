@@ -56,6 +56,13 @@ RECONCILE_CADENCE_SECONDS = 60
 # the real paper account's actual equity at the 05-08 ops checkpoint.
 PAPER_ACCOUNT_EQUITY = 100_000.0
 
+# Owner directive 2026-08-11: hard nightly budget for NEW entries, applied
+# across the whole book per entry-pipeline run. Sizing weights still come
+# from PAPER_ACCOUNT_EQUITY (whole-share US stocks are unbuyable against a
+# $600 equity base); this cap bounds the DOLLARS actually deployed per
+# night. Positions already open keep running under their locked exits.
+PAPER_NIGHTLY_BUDGET = 600.0
+
 
 def ibkr_host() -> str:
     """Read IBKR_HOST_ENV at call time, defaulting to IBKR_HOST_DEFAULT."""

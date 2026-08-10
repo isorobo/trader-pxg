@@ -349,12 +349,15 @@ def test_full_run_routes_candidate_to_its_own_familys_profile(
     order = ledger.get_order_by_ref(paper_conn, result["submitted"][0])
     assert order["strategy_id"] == "donchian_probe"
 
-    # Probation sizing: the sizer's 0.50 single-position cap binds first,
-    # then the frozen 25% probation multiplier applies to the dollar
-    # amount -- 0.50 * 0.25 = 0.125 of equity.
+    # Probation sizing (0.50 cap x 0.25 multiplier = 0.125 of equity),
+    # bound by the owner's nightly budget (2026-08-11) before rounding.
     price = 100.0 * (1.01 ** 34)
     expected_qty = entry_pipeline.broker_ibkr.round_shares_down(
-        0.50 * 0.25 * paper_config.PAPER_ACCOUNT_EQUITY, price
+        min(
+            0.50 * 0.25 * paper_config.PAPER_ACCOUNT_EQUITY,
+            paper_config.PAPER_NIGHTLY_BUDGET,
+        ),
+        price,
     )
     assert order["qty"] == expected_qty
 
@@ -362,6 +365,27 @@ def test_full_run_routes_candidate_to_its_own_familys_profile(
 # ---------------------------------------------------------------------------
 # Task 2 -- happy path: STEP0(no-op) -> gate -> sizer -> round -> submit
 # ---------------------------------------------------------------------------
+
+
+def test_nightly_budget_caps_new_entries(paper_conn, fake_ib, monkeypatch):
+    """Owner directive 2026-08-11: at most PAPER_NIGHTLY_BUDGET dollars of
+    NEW entries per run -- the fixture's uncapped allocation would be
+    ~$12.5k (0.5 cap x 0.25 probation is far above $600), so the budget
+    must bind and the order's notional must come in at or under $600."""
+    _insert_live_registry_row(paper_conn, "donchian_probe", "donchian_stock", "sys1")
+    _patch_bars(monkeypatch, {"AAPL": _rising_bars_df()})
+    fake_ib.placeOrder.return_value.order.permId = 888
+    adapter = _ibkr_adapter(fake_ib)
+
+    result = entry_pipeline.run_entry_pipeline_once(
+        paper_conn, adapter, as_of_date=TRADING_DAY
+    )
+
+    assert len(result["submitted"]) == 1
+    order = ledger.get_order_by_ref(paper_conn, result["submitted"][0])
+    price = 100.0 * (1.01 ** 34)
+    assert order["qty"] >= 1
+    assert order["qty"] * price <= paper_config.PAPER_NIGHTLY_BUDGET
 
 
 def test_full_happy_path_scans_gates_sizes_rounds_and_submits(paper_conn, fake_ib, monkeypatch):
@@ -396,10 +420,11 @@ def test_qty_is_rounded_down_never_up(paper_conn, fake_ib, monkeypatch):
 
     order = ledger.get_order_by_ref(paper_conn, result["submitted"][0])
     price = 100.0 * (1.01 ** 34)  # the fixture's last close (35 bars, i=0..34)
-    # A single candidate against 0 open positions preliminary-weights to
-    # 0.90 (1 - 0.10 cash reserve), which SIZER_SINGLE_POSITION_CAP (0.50)
-    # binds down to -- an intentionally non-whole-share dollar allocation.
-    dollar_amount = 0.50 * paper_config.PAPER_ACCOUNT_EQUITY
+    # The 0.50-cap allocation ($50k) is bound down by the owner's nightly
+    # budget (2026-08-11) before rounding.
+    dollar_amount = min(
+        0.50 * paper_config.PAPER_ACCOUNT_EQUITY, paper_config.PAPER_NIGHTLY_BUDGET
+    )
     expected_qty = entry_pipeline.broker_ibkr.round_shares_down(dollar_amount, price)
 
     assert order["qty"] == expected_qty
