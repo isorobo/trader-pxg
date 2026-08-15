@@ -22,8 +22,29 @@ def sent(monkeypatch):
     return calls
 
 
+def test_alert_says_logged_out_when_process_alive(monkeypatch, sent):
+    """2026-08-16: the two outage kinds need OPPOSITE fixes, so the alert
+    must name which one it is."""
+    monkeypatch.setattr(gateway_watchdog, "probe_port", lambda *a, **k: False)
+    monkeypatch.setattr(gateway_watchdog, "gateway_process_alive", lambda: True)
+
+    gateway_watchdog.run_watchdog_once()
+
+    assert "logged the session out" in sent[0][1]
+
+
+def test_alert_says_process_gone_when_not_running(monkeypatch, sent):
+    monkeypatch.setattr(gateway_watchdog, "probe_port", lambda *a, **k: False)
+    monkeypatch.setattr(gateway_watchdog, "gateway_process_alive", lambda: False)
+
+    gateway_watchdog.run_watchdog_once()
+
+    assert "NOT running at all" in sent[0][1]
+
+
 def test_down_alerts_once_then_stays_quiet(monkeypatch, sent):
     monkeypatch.setattr(gateway_watchdog, "probe_port", lambda *a, **k: False)
+    monkeypatch.setattr(gateway_watchdog, "gateway_process_alive", lambda: True)
 
     gateway_watchdog.run_watchdog_once()
     gateway_watchdog.run_watchdog_once()

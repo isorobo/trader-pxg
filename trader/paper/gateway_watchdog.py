@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import socket
+import subprocess
 import sys
 from pathlib import Path
 
@@ -32,6 +33,41 @@ def probe_port(host: str, port: int, timeout_s: float = 5.0) -> bool:
             return True
     except OSError:
         return False
+
+
+def gateway_process_alive() -> bool | None:
+    """True/False when the ibgateway process state is knowable, None when
+    the check itself fails. Distinguishes the two outage kinds, which need
+    OPPOSITE fixes (2026-08-16): process gone = app/machine died, relaunch
+    fixes it; process alive but port shut = IBKR logged the session out,
+    only credentials fix it. Without this the alert cannot say which."""
+    try:
+        completed = subprocess.run(
+            ["tasklist", "/FI", "IMAGENAME eq ibgateway.exe", "/NH"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        return "ibgateway.exe" in completed.stdout
+    except Exception:
+        return None
+
+
+def _diagnosis() -> str:
+    alive = gateway_process_alive()
+    if alive is True:
+        return (
+            "The Gateway process IS running but its API port is shut -- IBKR "
+            "logged the session out. Open the Gateway window and sign in "
+            "again with the paper username; nothing else will fix this."
+        )
+    if alive is False:
+        return (
+            "The Gateway process is NOT running at all -- it was closed, "
+            "crashed, or the machine restarted. Relaunch ibgateway.exe and "
+            "sign in."
+        )
+    return "Could not determine whether the Gateway process is running."
 
 
 def _read_state() -> str:
@@ -56,11 +92,9 @@ def run_watchdog_once(host: str | None = None, port: int | None = None) -> dict:
     if not up_now and prior != "down":
         alerts.notify(
             "error",
-            "GATEWAY DOWN: IBKR Gateway port "
-            f"{port} is not answering -- stock entries, exits, and "
-            "reconciliation are BLIND until you open the Gateway and click "
-            "Paper Log In. (One alert per outage; the all-clear follows on "
-            "recovery.)",
+            f"GATEWAY DOWN: port {port} is not answering -- stock entries, "
+            f"exits, and reconciliation are BLIND. {_diagnosis()} "
+            "(One alert per outage; the all-clear follows on recovery.)",
         )
         _write_state("down")
     elif up_now and prior == "down":
