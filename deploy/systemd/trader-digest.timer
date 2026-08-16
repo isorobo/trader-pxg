@@ -1,0 +1,11 @@
+﻿[Unit]
+Description=Trader AI: daily PnL digest 08:30 NZ
+
+[Timer]
+OnCalendar=*-*-* 08:30:00
+Persistent=true
+AccuracySec=15s
+Unit=trader@trader.paper.daily_digest.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,7 @@
+# Shell scripts and systemd units MUST keep LF endings. Checked out with
+# CRLF on a Linux box they fail as "bad interpreter: /bin/bash^M" and
+# systemd silently refuses the unit -- a failure mode that would look
+# exactly like "the VPS just doesn't run anything".
+*.sh text eol=lf
+*.service text eol=lf
+*.timer text eol=lf

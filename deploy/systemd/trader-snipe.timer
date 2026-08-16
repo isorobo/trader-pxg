@@ -1,0 +1,11 @@
+﻿[Unit]
+Description=Trader AI: owner snipe experiment hourly at :05
+
+[Timer]
+OnCalendar=*:05
+Persistent=false
+AccuracySec=15s
+Unit=trader@trader.paper.snipe_experiment.service
+
+[Install]
+WantedBy=timers.target

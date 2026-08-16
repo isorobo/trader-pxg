@@ -1,0 +1,21 @@
+[Unit]
+# One templated unit for every scheduled job -- systemd's instance name is
+# the python module to run, with dots kept (e.g. trader@trader.paper.guardian).
+# Replaces the Windows Task Scheduler + .bat + hidden-launcher stack with
+# something that has real logs (journalctl) and cannot silently fail to
+# start because a path contained a space.
+Description=Trader AI job %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=trader
+WorkingDirectory=/home/trader/trader
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=-/home/trader/trader/.env
+ExecStart=/home/trader/trader/.venv/bin/python -m %i --once
+# A job that hangs must not wedge its timer forever (the reqOpenOrders
+# lesson from 2026-07-30, enforced at the process level too).
+TimeoutStartSec=600
+Nice=5

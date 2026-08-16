@@ -1,0 +1,11 @@
+﻿[Unit]
+Description=Trader AI: stock entry scan, daily 01:45 NZ
+
+[Timer]
+OnCalendar=*-*-* 01:45:00
+Persistent=false
+AccuracySec=15s
+Unit=trader@trader.paper.entry_pipeline.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,11 @@
+﻿[Unit]
+Description=Trader AI: broker reconciliation every minute
+
+[Timer]
+OnCalendar=*:0/1
+Persistent=false
+AccuracySec=15s
+Unit=trader@trader.paper.reconcile.service
+
+[Install]
+WantedBy=timers.target

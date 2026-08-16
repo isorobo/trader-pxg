@@ -1,0 +1,11 @@
+﻿[Unit]
+Description=Trader AI: crypto leg hourly at :10
+
+[Timer]
+OnCalendar=*:10
+Persistent=false
+AccuracySec=15s
+Unit=trader@trader.paper.crypto_entry_pipeline.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,11 @@
+﻿[Unit]
+Description=Trader AI: ground-truth scanner every 15 min
+
+[Timer]
+OnCalendar=*:0/15
+Persistent=true
+AccuracySec=15s
+Unit=trader@trader.ground_truth.poll.service
+
+[Install]
+WantedBy=timers.target

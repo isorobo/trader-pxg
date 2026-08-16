@@ -1,0 +1,11 @@
+﻿[Unit]
+Description=Trader AI: weekly tournament + graduation, Sun 15:00 NZ
+
+[Timer]
+OnCalendar=Sun *-*-* 15:00:00
+Persistent=true
+AccuracySec=15s
+Unit=trader@trader.tournament.run_tournament.service
+
+[Install]
+WantedBy=timers.target
