@@ -1,4 +1,4 @@
-﻿[Unit]
+[Unit]
 Description=Trader AI: crypto leg hourly at :10
 
 [Timer]

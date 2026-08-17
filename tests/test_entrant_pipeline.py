@@ -1,4 +1,4 @@
-"""Phase 7 tests: D-04 probation sizing at the entry pipeline's one correct
+﻿"""Phase 7 tests: D-04 probation sizing at the entry pipeline's one correct
 insertion point (07-01-PLAN.md wave 2), and the D-07 entrant state machine
 (07-02-PLAN.md wave 3, added in that wave)."""
 
@@ -11,7 +11,9 @@ import pytest
 
 from trader.paper import config as paper_config
 from trader.paper import config_store, entry_pipeline, ledger
+from trader.risk import config as risk_config
 from trader.tournament import frozen_config
+
 
 from tests.test_entry_pipeline import (  # reuse the established fixture kit
     TRADING_DAY,
@@ -20,6 +22,28 @@ from tests.test_entry_pipeline import (  # reuse the established fixture kit
     _patch_bars,
     _rising_bars_df,
 )
+
+
+def _pin_top_n(monkeypatch, value: int) -> None:
+    """Pin the sizer's concurrent-position cap for one test.
+
+    The live SIZER_TOP_N is owner-tunable (raised 3 -> 20 on 2026-08-10 for
+    high-throughput paper testing). Sizing-MATH tests must keep asserting
+    the arithmetic they were written for, not track that dial.
+    """
+    monkeypatch.setattr(risk_config, "SIZER_TOP_N", value)
+
+
+def _unconstrained_budget(monkeypatch) -> None:
+    """Lift the nightly dollar cap for one test.
+
+    The owner's $600/night budget (2026-08-11) clips a single position long
+    before the 25% probation multiplier can change anything -- min(50_000,
+    600) and min(12_500, 600) are both $600, so probation and full would
+    look identical and these tests would prove nothing. The multiplier's
+    arithmetic is what they exist to pin, so they run budget-unconstrained.
+    """
+    monkeypatch.setattr(paper_config, "PAPER_NIGHTLY_BUDGET", 10_000_000.0)
 
 
 @pytest.fixture(autouse=True)
@@ -43,6 +67,8 @@ def _demote_all_to_probation(conn) -> None:
 def test_probation_config_sized_at_quarter_of_full(paper_conn, fake_ib, monkeypatch):
     """Same fixture, same candidate: a probation-state registry cuts the
     submitted qty to what a 25%-scaled dollar amount rounds down to."""
+    _pin_top_n(monkeypatch, 3)
+    _unconstrained_budget(monkeypatch)
     _patch_bars(monkeypatch, {"AAPL": _rising_bars_df()})
     fake_ib.placeOrder.return_value.order.permId = 555
     adapter = _ibkr_adapter(fake_ib)
@@ -77,6 +103,8 @@ def test_probation_config_sized_at_quarter_of_full(paper_conn, fake_ib, monkeypa
 
 
 def test_full_state_config_never_scaled(paper_conn, fake_ib, monkeypatch):
+    _pin_top_n(monkeypatch, 3)
+    _unconstrained_budget(monkeypatch)
     _patch_bars(monkeypatch, {"AAPL": _rising_bars_df()})
     fake_ib.placeOrder.return_value.order.permId = 556
     adapter = _ibkr_adapter(fake_ib)
@@ -295,9 +323,12 @@ def test_retire_is_terminal_and_writes_kill_state(paper_conn):
         _register(paper_conn, "donchian_v1")
 
 
-def test_active_cap_queues_seventh_entrant(paper_conn):
+def test_active_cap_queues_seventh_entrant(paper_conn, monkeypatch):
     """5 seeds + 1 admitted = 6 active (the cap); the next candidate stays
-    queued."""
+    queued. The cap NUMBER is owner-tunable (raised to 20 on 2026-08-10),
+    so this pins 6 locally -- what must never regress is that SOME cap is
+    enforced and the overflow entrant is queued rather than lost."""
+    monkeypatch.setattr(pipeline.frozen_config, "MAX_ACTIVE_STRATEGIES", 6)
     for name in ("donchian_v1", "rsi2_v1"):
         _register(paper_conn, name)
         _stamp_all(paper_conn, name)
@@ -313,8 +344,12 @@ def test_active_cap_queues_seventh_entrant(paper_conn):
     assert row[0] == "candidate"  # queued, not lost
 
 
-def test_quarterly_entrant_cap(paper_conn):
-    """Room on the roster, but only 2 admissions per calendar quarter."""
+def test_quarterly_entrant_cap(paper_conn, monkeypatch):
+    """Room on the roster, but only 2 admissions per calendar quarter.
+    Pinned locally for the same reason as the roster cap (owner raised the
+    live number to 12) -- the invariant under test is that the quarterly
+    cap binds at all, and that a new quarter resets it."""
+    monkeypatch.setattr(pipeline.frozen_config, "MAX_NEW_ENTRANTS_PER_QUARTER", 2)
     _retire_seeds(paper_conn, 3)
     for name in ("donchian_v1", "rsi2_v1", "tsmom_v1"):
         _register(paper_conn, name)

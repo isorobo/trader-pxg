@@ -138,6 +138,49 @@ def test_tampered_hourly_file_raises(tmp_path):
         verify_frozen_hourly(repo_root=tmp_path)
 
 
+def test_hourly_evidence_expected_count_matches_real_sizes():
+    from trader.backtest.run_hourly_evidence import (
+        _STRATEGY_SPECS,
+        EXPECTED_TUNE_RUN_COUNT_HOURLY,
+    )
+
+    grid_size = len(hourly_exit_profile_grid("crypto_major_legacy_meme"))
+    expected = sum(
+        len(variants) * len(REGIMES_1H) * grid_size
+        for _, variants, _ in _STRATEGY_SPECS
+    ) // 1
+    assert expected == EXPECTED_TUNE_RUN_COUNT_HOURLY
+
+
+def test_hourly_evidence_driver_verifies_gate_first(monkeypatch):
+    from trader.backtest import run_hourly_evidence
+
+    monkeypatch.setattr(
+        run_hourly_evidence,
+        "verify_frozen_hourly",
+        lambda: (_ for _ in ()).throw(RuntimeError("integrity check failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="integrity check failed"):
+        run_hourly_evidence.main(conn=object())
+
+
+def test_cached_strategy_fn_is_equivalent_and_filters_open_positions():
+    from trader.backtest.run_hourly_evidence import _cached_strategy_fn
+
+    calls = []
+
+    def pick(iterator, date, open_positions, rng):
+        calls.append(date)
+        return ["A", "B"]
+
+    cache: dict = {}
+    fn = _cached_strategy_fn(pick, cache)
+    assert fn(None, "t1", set(), None) == ["A", "B"]
+    assert fn(None, "t1", {"A"}, None) == ["B"]  # cache hit, filter applied
+    assert calls == ["t1"]  # scanned exactly once
+
+
 def test_hourly_grid_is_24_cells_with_hour_scale_exits():
     grid = hourly_exit_profile_grid("crypto_major_legacy_meme")
     assert len(grid) == 24

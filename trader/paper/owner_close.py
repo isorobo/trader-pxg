@@ -15,7 +15,15 @@ import sys
 from datetime import date, datetime, timezone
 
 from trader.backtest.fills import fee_for
-from trader.paper import alerts, broker_crypto_sim, broker_ibkr, config, idempotency, ledger
+from trader.paper import (
+    alerts,
+    broker_crypto_sim,
+    broker_ibkr,
+    calendar_,
+    config,
+    idempotency,
+    ledger,
+)
 
 _INTENT = "exit_owner_close"
 _REASON = "owner_close"
@@ -36,7 +44,7 @@ def close_position_by_symbol(conn, ibkr_adapter, symbol: str) -> dict:
     now_iso = datetime.now(timezone.utc).isoformat()
 
     order_ref = idempotency.build_order_ref(
-        strategy_id, symbol, date.today().isoformat(), "sell", _INTENT
+        strategy_id, symbol, calendar_.market_date_now().isoformat(), "sell", _INTENT
     )
     ledger.record_order(
         conn, order_ref, strategy_id, symbol, venue, "sell", _INTENT, qty,

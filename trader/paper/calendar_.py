@@ -11,10 +11,27 @@ Static calendar lookup only -- no network call, no broker connection.
 """
 
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import pandas_market_calendars as mcal
 
 _NYSE = mcal.get_calendar("NYSE")
+
+MARKET_TZ = ZoneInfo("America/New_York")
+
+
+def market_date_now(now: datetime | None = None) -> date:
+    """The NYSE calendar date at this instant, in MARKET time.
+
+    Load-bearing for any caller that asks "is the market open today?"
+    from New Zealand (2026-08-16 bug): NZ runs 16 hours ahead of New York,
+    so the 01:45 NZ scan happens on the PREVIOUS US date. Using the local
+    date silently skipped every Friday US session (Saturday in NZ) and
+    tried to trade every Sunday US session (Monday in NZ) -- one lost
+    trading day in five, plus orders queued into a closed market. Never
+    use date.today() to gate a US-market decision.
+    """
+    return (now or datetime.now(MARKET_TZ)).astimezone(MARKET_TZ).date()
 
 
 def is_trading_day(check_date: date) -> bool:

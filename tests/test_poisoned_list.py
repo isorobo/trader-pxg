@@ -25,6 +25,8 @@ full two-stage pipeline, including the memecoin cap clip and the
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -206,11 +208,20 @@ def test_two_stage_pipeline_sizer_clips_memecoin_allocation():
         for candidate in accepted
     ]
 
+    # This test pins the gate+sizer reason-code/clip contract at the
+    # top-3 shape it was written for; the live SIZER_TOP_N is an
+    # owner-tunable dial (raised to 20 on 2026-08-10) and must not silently
+    # rewrite what this asserts.
+    top3_config = SimpleNamespace(
+        **{name: getattr(config, name) for name in dir(config) if name.isupper()}
+    )
+    top3_config.SIZER_TOP_N = 3
+
     result = sizer.size_positions(
         scored_candidates=scored_candidates,
         equity=100_000.0,
         open_positions=[],
-        config=config,
+        config=top3_config,
     )
     weights = {p["symbol"]: p["weight"] for p in result["positions"]}
 

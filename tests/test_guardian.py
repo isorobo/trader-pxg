@@ -1,4 +1,4 @@
-﻿"""Tests for trader.paper.guardian -- the 5-minute-cadence exit-monitoring
+"""Tests for trader.paper.guardian -- the 5-minute-cadence exit-monitoring
 process (05-05-PLAN.md).
 
 Uses the paper_conn fixture (tests/conftest.py, every migration applied) and

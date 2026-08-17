@@ -29,3 +29,9 @@ ops/
 # OS / editor
 .DS_Store
 Thumbs.db
+
+# IB Gateway install: a vendor binary distribution that lives inside the
+# repo folder. It carries launcher logs and per-user session/settings
+# files (jts.ini holds the account's directory mapping), so it must never
+# reach a public remote -- and it is reinstallable in one download.
+ibgateway/

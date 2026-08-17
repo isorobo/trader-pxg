@@ -1,4 +1,4 @@
-﻿[Unit]
+[Unit]
 Description=Trader AI: stock entry scan, daily 01:45 NZ
 
 [Timer]

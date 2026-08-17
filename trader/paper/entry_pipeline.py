@@ -336,7 +336,11 @@ def run_entry_pipeline_once(conn, ibkr_adapter, as_of_date: date | None = None) 
     top, before anything else -- reused by both STEP 0 and the
     per-candidate heal check (STEP 1) below.
     """
-    as_of_date = as_of_date or date.today()
+    # MARKET date, never the local one (2026-08-16): from NZ the 01:45
+    # scan lands on the previous US date, so date.today() skipped every
+    # Friday session and traded every closed Sunday. See
+    # calendar_.market_date_now's docstring.
+    as_of_date = as_of_date or calendar_.market_date_now()
     broker_fills = ibkr_adapter.snapshot()["fills"]
 
     # STEP 0 -- unconditional, unscoped heal pass. Runs BEFORE the

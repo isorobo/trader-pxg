@@ -1,4 +1,4 @@
-﻿[Unit]
+[Unit]
 Description=Trader AI: Gateway outage alarm every 15 min
 
 [Timer]

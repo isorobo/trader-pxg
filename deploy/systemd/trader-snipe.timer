@@ -1,4 +1,4 @@
-﻿[Unit]
+[Unit]
 Description=Trader AI: owner snipe experiment hourly at :05
 
 [Timer]

@@ -1,4 +1,4 @@
-﻿"""The hash-based freeze gate for the intraday (1h) track's frozen
+"""The hash-based freeze gate for the intraday (1h) track's frozen
 surface: both hourly entry-signal modules AND the hourly exit grid +
 windows -- one standalone gate per frozen surface, the established
 precedent.

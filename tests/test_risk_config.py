@@ -66,7 +66,11 @@ def test_correlation_threshold():
 
 
 def test_sizer_top_n():
-    assert config.SIZER_TOP_N == 3
+    # Sanctioned owner recalibration 2026-08-10 (3 -> 20 concurrent
+    # positions for the high-throughput paper-testing phase, zero closed
+    # trades on the books at the time). This assertion is deliberately
+    # literal so the change stays a two-place edit, never a drive-by.
+    assert config.SIZER_TOP_N == 20
 
 
 def test_sizer_volatility_window_days():

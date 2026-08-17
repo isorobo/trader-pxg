@@ -1,4 +1,4 @@
-﻿[Unit]
+[Unit]
 Description=Trader AI: daily PnL digest 08:30 NZ
 
 [Timer]
