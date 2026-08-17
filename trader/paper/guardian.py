@@ -38,7 +38,16 @@ from trader.backtest import metrics
 from trader.backtest.config import EXIT_PROFILE
 from trader.backtest.exits import ExitResult, PositionState, evaluate_exit, next_watermark
 from trader.backtest.fills import fee_for
-from trader.paper import alerts, broker_crypto_sim, calendar_, config, config_store, idempotency, ledger
+from trader.paper import (
+    alerts,
+    broker_crypto_sim,
+    calendar_,
+    config,
+    config_store,
+    idempotency,
+    ledger,
+    ops_log,
+)
 from trader.paper.broker_ibkr import IBKRBrokerAdapter
 from trader.risk import breakers
 
@@ -392,7 +401,12 @@ def run_guardian_once(
     if now is None:
         now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
-    as_of_date = now.date()
+    # MARKET date, never UTC's or the local one (2026-08-17): now.date()
+    # in UTC is already tomorrow relative to New York for most of the NZ
+    # day, so the is_trading_day gate below let weekend ticks through and
+    # they died on unpriceable symbols. Same root cause as the entry
+    # pipeline's gate -- see calendar_.market_date_now.
+    as_of_date = calendar_.market_date_now(now)
 
     open_positions = ledger.get_open_positions(conn)
 
@@ -406,18 +420,32 @@ def run_guardian_once(
     broker_fills = ibkr_adapter.snapshot()["fills"]
 
     exits: list[dict] = []
+    unpriced: list[str] = []
     for position in open_positions:
         symbol = position["symbol"]
         venue = position["venue"]
 
-        if venue == "ibkr_paper":
-            if not calendar_.is_trading_day(as_of_date):
-                # The stock leg only trades during NYSE sessions; the
-                # crypto_sim leg below always processes regardless (D-05).
-                continue
-            current_price = ibkr_adapter.latest_price(symbol)
-        else:
-            current_price = broker_crypto_sim.fetch_price(symbol, crypto_adapter)
+        try:
+            if venue == "ibkr_paper":
+                if not calendar_.is_trading_day(as_of_date):
+                    # The stock leg only trades during NYSE sessions; the
+                    # crypto_sim leg below always processes regardless (D-05).
+                    continue
+                current_price = ibkr_adapter.latest_price(symbol)
+            else:
+                current_price = broker_crypto_sim.fetch_price(symbol, crypto_adapter)
+        except Exception as error:  # noqa: BLE001
+            # One unpriceable symbol must not blind the whole book
+            # (2026-08-17). Refusing to evaluate THIS position on an
+            # unknown price is the correct safety; skipping every OTHER
+            # position's stop-loss check as collateral damage is not.
+            unpriced.append(symbol)
+            ops_log.append_ops_log(
+                "error",
+                f"guardian could not price {symbol} ({type(error).__name__}) -- "
+                "its exits are UNCHECKED this tick; other positions continue",
+            )
+            continue
 
         exit_result = evaluate_position_exit(position, current_price, as_of_date)
         if exit_result is None:
@@ -446,7 +474,7 @@ def run_guardian_once(
     evaluate_account_breakers(conn)
     evaluate_kill_conditions(conn)
 
-    return {"exits": exits, "ticked": len(open_positions)}
+    return {"exits": exits, "ticked": len(open_positions), "unpriced": unpriced}
 
 
 def main(argv: list[str] | None = None) -> None:
